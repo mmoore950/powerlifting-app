@@ -18,6 +18,22 @@ class SupervisorTests(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         self.receipt = self.root / "process.json"
+        self.addCleanup(self.preserve_receipt)
+
+    def preserve_receipt(self):
+        directory = os.environ.get("SUPERVISOR_TEST_EVIDENCE_DIR")
+        if directory and self.receipt.is_file():
+            destination = Path(directory) / ("supervisor-" + self._testMethodName + ".process.json")
+            destination.write_bytes(self.receipt.read_bytes())
+
+    def preserve_result(self, stdout, stderr, suffix=""):
+        directory = os.environ.get("SUPERVISOR_TEST_EVIDENCE_DIR")
+        if directory:
+            prefix = Path(directory) / ("supervisor-" + self._testMethodName + suffix)
+            prefix.with_name(prefix.name + ".stdout.log").write_text(stdout, encoding="utf-8")
+            prefix.with_name(prefix.name + ".stderr.log").write_text(stderr, encoding="utf-8")
+            if self.receipt.is_file():
+                prefix.with_name(prefix.name + ".process.json").write_bytes(self.receipt.read_bytes())
 
     def command(self, source, timeout=3):
         return [sys.executable, str(SUPERVISOR), "--timeout", str(timeout),
@@ -28,9 +44,14 @@ class SupervisorTests(unittest.TestCase):
         result = subprocess.run(self.command(source, timeout), timeout=8,
                                 capture_output=True, text=True)
         receipt = json.loads(self.receipt.read_text())
+        self.preserve_result(result.stdout, result.stderr)
+        details = json.dumps(receipt, sort_keys=True) + "\n" + result.stdout + result.stderr
+        # CI failures must retain the actual supervisor error rather than a
+        # secondary KeyError or a TemporaryDirectory that disappears at teardown.
+        print(f"{self.id()}: {details}", flush=True)
         self.assertEqual(receipt["state"], "finished")
         self.assertEqual(receipt["wrapperExitCode"], result.returncode)
-        self.assertTrue(receipt["directChildWaitCompleted"])
+        self.assertTrue(receipt.get("directChildWaitCompleted"), details)
         return result, receipt
 
     def test_success(self):
@@ -56,7 +77,8 @@ class SupervisorTests(unittest.TestCase):
     def test_launch_error(self):
         command = self.command("pass")
         command[-3:] = [str(self.root / "missing-command")]
-        result = subprocess.run(command, capture_output=True, timeout=8)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=8)
+        self.preserve_result(result.stdout, result.stderr)
         receipt = json.loads(self.receipt.read_text())
         self.assertEqual(result.returncode, 125)
         self.assertEqual(receipt["reason"], "supervisor-error")
@@ -71,13 +93,14 @@ class SupervisorTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "posix", "POSIX signal forwarding needs a POSIX host")
     def test_signal_cancels_and_reaps_child(self):
-        self.check_signal(signal.SIGTERM)
-        self.check_signal(signal.SIGINT)
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            with self.subTest(signal=signum):
+                self.check_signal(signum)
 
     def check_signal(self, signum):
         self.receipt.unlink(missing_ok=True)
         process = subprocess.Popen(self.command("import time; time.sleep(30)"),
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.addCleanup(lambda: process.poll() is None and process.kill())
         deadline = time.monotonic() + 3
         while time.monotonic() < deadline:
@@ -87,8 +110,12 @@ class SupervisorTests(unittest.TestCase):
         else:
             self.fail("Supervisor never recorded its owned child")
         process.send_signal(signum)
-        self.assertEqual(process.wait(timeout=5), 128 + signum)
+        stdout, stderr = process.communicate(timeout=5)
+        actual_code = process.returncode
+        self.preserve_result(stdout, stderr, "-" + signal.Signals(signum).name)
         receipt = json.loads(self.receipt.read_text())
+        print(f"{self.id()} signal={signum}: {json.dumps(receipt, sort_keys=True)}\n{stdout}{stderr}", flush=True)
+        self.assertEqual(actual_code, 128 + signum, json.dumps(receipt, sort_keys=True))
         self.assertEqual(receipt["reason"], "cancelled")
         self.assertEqual(receipt["cancellationSignal"], signum)
         self.assertTrue(receipt["ownedGroupAbsent"])

@@ -20,7 +20,7 @@ case "$phase" in
     xcrun --sdk iphonesimulator --show-sdk-version
     python3 --version
     # Actual POSIX child/group/cancellation checks run on this macOS host.
-    python3 tools/ci/test-supervise-process.py
+    SUPERVISOR_TEST_EVIDENCE_DIR="$output" python3 tools/ci/test-supervise-process.py
     tool_dir="${RUNNER_TEMP:?Hosted runner temp directory required}/powerlifting-xcodegen"
     mkdir -p "$tool_dir"
     curl --fail --location --max-time 120 --retry 2 \

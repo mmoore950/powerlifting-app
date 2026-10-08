@@ -12,6 +12,7 @@ from pathlib import Path
 import signal
 import subprocess
 import time
+import traceback
 
 KILL_SIGNAL = getattr(signal, "SIGKILL", 9)
 
@@ -63,10 +64,12 @@ def main():
     def owned_alive():
         # Poll also reaps the direct child. killpg(0) observes group existence;
         # it cannot distinguish a live descendant from an unreaped zombie.
+        evidence["operation"] = "poll-direct-child"
         child.poll()
         if not posix:
             return child.returncode is None
         try:
+            evidence["operation"] = "observe-owned-group"
             os.killpg(child.pid, 0)
             return True
         except ProcessLookupError:
@@ -74,6 +77,7 @@ def main():
 
     def send(signum):
         try:
+            evidence["operation"] = "signal-owned-group" if posix else "signal-direct-child"
             if posix:
                 os.killpg(child.pid, signum)
             elif child.poll() is None:
@@ -104,6 +108,7 @@ def main():
                 wait_owned(args.kill_wait)
         # Always call wait on the direct child; grandchildren are not waitable.
         try:
+            evidence["operation"] = "wait-direct-child"
             child.wait(timeout=max(0.01, args.kill_wait if child.poll() is None else 0.01))
         except subprocess.TimeoutExpired:
             evidence["directChildWaitCompleted"] = False
@@ -147,12 +152,15 @@ def main():
             evidence.update(reason="cancelled", cancellationSignal=requested_signal)
             exit_code = 128 + requested_signal
     except Exception as error:
-        evidence.update(reason="supervisor-error", error=f"{type(error).__name__}: {error}")
+        evidence.update(reason="supervisor-error", error=f"{type(error).__name__}: {error}",
+                        errorOperation=evidence.get("operation"), errorTraceback=traceback.format_exc())
         if child is not None:
             try:
                 evidence["cleanupComplete"] = cleanup(signal.SIGTERM)
             except Exception as cleanup_error:
-                evidence.update(cleanupComplete=False, cleanupError=str(cleanup_error))
+                evidence.update(cleanupComplete=False, cleanupError=str(cleanup_error),
+                                cleanupErrorOperation=evidence.get("operation"),
+                                cleanupErrorTraceback=traceback.format_exc())
         exit_code = 125
     finally:
         evidence.update(state="finished", wrapperExitCode=exit_code)

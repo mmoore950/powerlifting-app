@@ -41,6 +41,9 @@ POSIX TERM/KILL, SIGINT/SIGTERM cancellation, child/grandchild cleanup and unrel
 process preservation and descendants remaining after a normal parent exit.
 Windows runs only four direct-child checks and skips the five POSIX methods.
 Source/local success is separate from macOS/Xcode execution.
+Supervisor test receipts/stdout/stderr are retained as unique top-level diagnostic
+files, with separate SIGTERM/SIGINT suffixes. Error receipts include the actual
+exception traceback and operation; a failed cleanup assertion does not erase them.
 
 1. Run `swift test --package-path Packages/LiftingCore`: fixture cases and 120 deterministic small-inventory comparisons against exhaustive full count-vector enumeration, plus invalid inputs/decoding/selection/cap cases.
 2. Generate the project, compile the app, run its scheme tests, including PowerliftingAppTests and the package tests. Resolve warnings that expose isolation, resources, test-host or package/scheme problems. New application test sources have not been generated/compiled/run in Windows.
