@@ -1,5 +1,25 @@
 # Worker status
 
+## SDK-matched runtime decision scope — October 8, 2026, 07:38 ET
+
+- Retained run18 setup reports Xcode16.4/build16F6 and simulator SDK18.5. Actual
+  verified inventory contains available18.5/18.6/26.0.1/26.1/26.2;18.5 has6
+  available iPhones. Existing selector chooses newest26.2 irrespective of SDK.
+  Actual Windows replay on retained data confirms current26.2; restricting the
+  in-memory runtime list to18.5 yields available iPhone16/565DED02..., Shutdown.
+  No simulator mutation/boot/compatibility/benefit claim follows.
+- Scope in native-sdk-runtime-selection-scope.md recommends explicit measured SDK
+  receipt/selector input, available major/minor match, deterministic live device
+  selection, refusal when absent (no latest fallback/download). Existing ownership,
+  fresh device/readiness/separate exports/all67/budgets remain. Apple release notes
+  agree SDK18.5 but do not establish26.2 incompatibility or migration root cause.
+- Scope only, completed within5–10min provisional/noharddeadline; leader decision
+  next, review ETA unknown until response. If approved source10–20min provisional,
+  noharddeadline. Later native15–22min afterstart remains uncertain with
+  build8/test10/job30 limits. No push/newCI. Actual SwiftUI task ordering/rendering
+  remains unverified; state test manually drives store adoption. Production/private/
+  device/release gates remain separate.
+
 ## Profile UI-state source audit — October 8, 2026, 07:35 ET
 
 - Source audit retained explicit all-category history and kg versus unitless DOTS,
