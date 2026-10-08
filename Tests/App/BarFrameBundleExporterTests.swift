@@ -190,6 +190,39 @@ final class BarFrameBundleExporterTests: XCTestCase {
             }
             XCTAssertGreaterThan(maximumRGB-minimumRGB, 50, "Asymmetric fixture lost RGB contrast")
         }
+        if rotated { try preserveGeneratedAttachments(media: media, destination: destination, frames: frames) }
+    }
+
+    /// One tiny generated rotated fixture only; never a user/imported real clip.
+    /// Attachment names are distinct from the five ToolkitSmokeTests screenshots.
+    private func preserveGeneratedAttachments(media: URL, destination: URL, frames: [[String: Any]]) throws {
+        var files: [(String, URL, String)] = [
+            ("native-generated-source", media, "com.apple.quicktime-movie"),
+            ("native-generated-ledger", destination.appendingPathComponent("ledger.json"), "public.json"),
+            ("native-generated-prediction", destination.appendingPathComponent("prediction.json"), "public.json"),
+            ("native-generated-bundle", destination.appendingPathComponent("bundle.json"), "public.json")
+        ]
+        for frame in frames {
+            let filename = try XCTUnwrap(frame["filename"] as? String)
+            files.append(("native-generated-" + (filename as NSString).deletingPathExtension, destination.appendingPathComponent("frames").appendingPathComponent(filename), "public.png"))
+        }
+        guard files.count <= 20 else { throw BarFrameBundleError.budget }
+        var total = 0, snapshots: [(String, Data, String)] = []
+        // The configured fixture is128x96/6frames, not the wider cap test or private media.
+        for (name, url, type) in files {
+            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            guard let size, size > 0, size <= 1024 * 1024 else { throw BarFrameBundleError.budget }
+            let bytes = try Data(contentsOf: url); total += bytes.count
+            guard bytes.count == size, total <= 2 * 1024 * 1024 else { throw BarFrameBundleError.budget }
+            snapshots.append((name, bytes, type))
+        }
+        for (name, bytes, type) in snapshots {
+            XCTContext.runActivity(named: "Generated native fixture: " + name) { activity in
+                let attachment = XCTAttachment(data: bytes, uniformTypeIdentifier: type)
+                attachment.name = name; attachment.lifetime = .keepAlways
+                activity.add(attachment)
+            }
+        }
     }
 
     private func context(media: URL) throws -> BarFrameBundleContext {

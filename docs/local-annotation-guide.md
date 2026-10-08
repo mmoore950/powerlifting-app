@@ -97,6 +97,8 @@ Exact PTS comes from the immutable sidecar, never editable UI metadata or playba
 
 ## Validate a native reference export
 
+For a complete native evaluation, prefer the strict wrapper below; the adapter-only export remains available when preparing references without a score.
+
 Only use this branch for a completed native directory, after labeling its captured images. Keep `prediction.json` adjacent to `ledger.json`. Preserve the managed movie or explicitly copy it unchanged into a new local asset root using the **same relative path** recorded by the ledger; the adapter does not translate original/managed paths.
 
 ```powershell
@@ -114,10 +116,27 @@ This output can be supplied as `--manifest` to `tools/score-video-traces.mjs`, w
 
 The scorer does not read the companion report or independently enforce the native-producer contract. Use the successful adapter export and its exact associated prediction file; a valid reference schema alone does not establish native provenance. The scorer reports diagnostics and always leaves `accuracyGatePassed:false`.
 
+## Evaluate a native bundle with bound inputs and outputs
+
+```powershell
+& $annotationNode tools\annotation\evaluate_native_bundle.mjs `
+  --ledger 'PATH-TO-COMPLETED-NATIVE-DIRECTORY\ledger.json' `
+  --labels 'PATH-TO-MATCHING-hub-labels-DOWNLOAD.json' `
+  --asset-root 'PATH-TO-RECORDED-MEDIA-ROOT' `
+  --output 'PATH-TO-NEW-LOCAL-EVALUATION-DIRECTORY'
+```
+
+Optional `--existing` checks the full project's recording/hash partitions. This entry point accepts only the native producer contract and matching labels. It offers no `--manifest` or purpose override, so renaming a PyAV draft cannot silently bypass its checks. It captures and validates actual prediction bytes once, derives references through the strict adapter and scores those same in-memory inputs. The generic scorer remains available for diagnostics.
+
+The fresh directory contains unchanged `ledger.json`/`prediction.json`, `references.native-reference.json` and companion adapter report, `score.json` and `evaluation.json`. The receipt binds each artifact's exact SHA-256/byte count, input label/optional registry digests, source relative identity, analysis/session/model/mode, review counts and scoring policy. Keep them together. Media/PNGs stay in their original explicit roots. Existing output is refused; invalid input produces no completed evaluation directory. Hash receipts detect later byte differences when compared against retained trusted receipts; they are not signatures authenticating origin. `accuracyGatePassed` stays false.
+
+Input limits:1MiB ledger/prediction,4MiB labels,32MiB optional registry; native16frames/500MiB source/32MiB PNGs; evaluation artifacts<=8MiB. JSON and source hash readers use60s cancellation checks; wrapper checks120s cooperatively around phases. Blocking I/O may overrun a phase check; there is no external kill deadline. Hard process termination may leave a clearly named partial staging folder; only the final directory indicates successful publication. Initial wrapper tests are synthetic contracts, not actual Apple-produced input. The [generated extraction recipe](generated-native-extraction.md) describes the approved future evidence route without private media.
+
 ## Developer verification and remaining gate
 
 ```powershell
 & $annotationNode --test tools\annotation\annotation.test.mjs
+& $annotationNode --test tools\annotation\native_evaluation.test.mjs
 & $annotationPython tools\annotation\prepare_frames_test.py
 & $annotationPython tools\annotation\build_offline.py
 ```

@@ -1,6 +1,6 @@
 # Strict native evaluation wrapper: source proposal
 
-October8,2026, approximately02:38ET. Requested independent scope while ninth generated-only native run executes. **Proposal only; no wrapper or workflow implementation.** Native failure repair takes priority. Addresses integration-gap6 without changing detector, reference/prediction schemas, generic scorer or accuracy policy.
+October8,2026, approximately02:37ET. Accepted source proposal, retained as the scope record. Implementation and actual checks now appear in [status.md](status.md) and [local-annotation-guide.md](local-annotation-guide.md); [generated-native-extraction.md](generated-native-extraction.md) records the source-only attachment route. No new CI dispatch was performed. Addresses integration-gap6 without changing detector, reference/prediction schemas, generic scorer or accuracy policy.
 
 ## Minimal entry point
 

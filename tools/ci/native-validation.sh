@@ -102,14 +102,7 @@ PY
     # This runs only after test success; failed runs still preserve test.xcresult.
     xcrun xcresulttool export attachments --path "$output/test.xcresult" \
       --output-path "$output/screenshots"
-    python3 - "$output/screenshots" <<'PY'
-from pathlib import Path
-import sys
-screenshots = list(Path(sys.argv[1]).rglob("*.png"))
-print(f"Exported PNG attachments: {len(screenshots)}")
-if len(screenshots) < 5:
-    raise SystemExit("Expected at least five UI smoke screenshot attachments")
-PY
+    python3 tools/ci/check-ui-attachments.py "$output/screenshots"
     ;;
   summary)
     {
