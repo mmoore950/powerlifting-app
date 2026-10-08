@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 output="$PWD/artifacts/native-ci"
 mkdir -p "$output"
-phase="${1:?Expected setup/core/http-setup/http-contract/prepare/build/test/screenshots/cleanup/summary}"
+phase="${1:?Expected setup/core/http-setup/http-contract/prepare/build/test/screenshots-ui/screenshots-unit/cleanup/summary}"
 if [[ "$phase" != summary ]]; then
   # pipefail propagates command failures; logs survive ordinary step failures.
   exec > >(tee "$output/$phase.log") 2>&1
@@ -100,12 +100,21 @@ PY
       --derived "${RUNNER_TEMP:?}/powerlifting-derived-data" \
       --selected "$output/selected-simulator.json" --owned-ui "$output/owned-ui-simulator.json"
     ;;
-  screenshots)
-    # Both successful result bundles are exported independently. Failed tests
-    # retain their available xcresults without fabricating a passed export gate.
+  screenshots-ui)
+    # Later test failures must not suppress evidence from a successful UI phase.
+    if [[ ! -f "$output/test-ui.exit-code" ]] || [[ "$(cat "$output/test-ui.exit-code")" != 0 ]]; then
+      printf 'UI screenshot export skipped: no successful UI phase.\n'
+      exit 0
+    fi
     xcrun xcresulttool export attachments --path "$output/test-ui.xcresult" \
       --output-path "$output/screenshots/ui"
     python3 tools/ci/check-ui-attachments.py "$output/screenshots/ui"
+    ;;
+  screenshots-unit)
+    if [[ ! -f "$output/test-unit.exit-code" ]] || [[ "$(cat "$output/test-unit.exit-code")" != 0 ]]; then
+      printf 'Unit attachment export skipped: no successful unit phase.\n'
+      exit 0
+    fi
     xcrun xcresulttool export attachments --path "$output/test-unit.xcresult" \
       --output-path "$output/screenshots/unit"
     test -f "$output/screenshots/unit/manifest.json"
@@ -118,7 +127,7 @@ PY
       printf '## Native validation diagnostics\n\n'
       printf 'Runner label: `macos-15-intel`; actual versions are in setup.log.\n\n'
       printf 'Revision: `%s`\n\n' "$(git rev-parse HEAD)"
-      for checked_phase in setup core http-setup http-contract prepare build test test-ui test-unit screenshots cleanup; do
+      for checked_phase in setup core http-setup http-contract prepare build test test-ui test-unit screenshots-ui screenshots-unit cleanup; do
         if [[ -f "$output/$checked_phase.exit-code" ]]; then
           printf -- '- %s exit code: %s\n' "$checked_phase" "$(cat "$output/$checked_phase.exit-code")"
         else

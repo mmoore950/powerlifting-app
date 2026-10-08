@@ -1,5 +1,67 @@
 # Worker status
 
+## Mac transfer checkpoint — October 8, 2026
+
+- Repository visibility is public so a friend's Mac can clone the source. A new
+  Mac Codex chat will read `docs/mac-handoff.md` for context; Windows-local chat
+  history does not transfer with the account sign-in.
+- Source transfer includes the local Run20 orchestration repair, independent
+  evidence exports, lifter-search freshness correction, and diagnostic record.
+  No new GitHub Actions run was dispatched. Apple execution of these edits is
+  pending on the Mac; the unsigned build and one smoke test belong to earlier
+  revision `cb26556`.
+- Next result is the first local Mac toolchain/build diagnostic. No reliable
+  time estimate exists until the Mac, Xcode, Simulator runtime, and project
+  checkout are available. The old GitHub job's 30-minute hard limit applies
+  only to that hosted workflow, not to local Mac validation.
+
+## Run20 blocker removed locally — October 8, 2026
+
+- Removed the redundant ten-second global simulator inventory between successful
+  UI execution and non-UI tests. Both phases retain the same explicit owned UUID;
+  verified ownership records are checked before each launch. Destructive cleanup
+  still checks live device identity. xcodebuild handles destination availability.
+- UI now reserves 120 seconds for following unit work, plus the existing cleanup
+  allowance, within the unchanged 560-second shared deadline. This reservation
+  does not guarantee enough time for every unit test.
+- Updated regressions exercise no intermediate simulator command, destination
+  consistency, changed ownership, UI failure, cancellation, shared deadline and
+  exact test inventory. Actual local result: 18 injected Python tests passed in
+  0.388 seconds. Bash syntax and whitespace checks passed. These are not iOS tests.
+- Independent screenshot-export correction is also local. No push, new GitHub
+  run, automation resumption or worker dispatch. Local repair complete; native
+  confirmation requires separately authorized Apple execution. Existing job hard
+  limit remains 30 minutes; execution duration and feature readiness are uncertain.
+
+## Local export dependency correction — October 8, 2026
+
+UI and unit attachment exports now have separate always-evaluated workflow steps;
+each requires its own successful test-phase exit receipt. A later unit-readiness
+failure no longer suppresses successful UI screenshot export. Bash syntax and
+git whitespace checks passed locally; Apple export execution remains unverified.
+No push or CI dispatch. Simulator inventory timeout remains unresolved. Existing
+actual simulator screenshots are available under
+artifacts/native-ci-runs/37728528425/screenshots; these are an earlier revision,
+not screenshots of the latest local edits or an installable device build.
+
+## Run20 diagnosis recovered — October 8, 2026
+
+Existing job logs and hash-verified diagnostic ZIP establish successful build and
+one passing five-tab UI smoke test. Failure occurred afterward: the ten-second
+simulator inventory command timed out and its supervisor encountered a process-
+group permission error (exit125). Non-UI simulator tests never launched; screenshot
+export was skipped by the workflow dependency. This supersedes the earlier broad
+description of a simulator-test failure. See native-run20-evidence.md. Diagnosis
+complete; no new CI run or worker dispatch. Native validation remains undated
+pending authorized execution; proposed maximum is one run, no retry, job30min.
+
+## Local resumption: lifter-search result identity — October 8, 2026
+
+- Leader resumed directly under the human's usage-conservation instruction. Worker remains idle; recurring automation is paused and no GitHub run is authorized by this resumption.
+- Search rows, empty-result messages, retry status and pagination now require the completed search identity (name plus metadata revision) and current dataset version. Changing a name or dataset immediately hides previous rows; valid pending searches show progress. The task captures its query before awaiting and cannot publish a cancelled or superseded identity.
+- Local diff review/whitespace verification only; SwiftUI compilation and rendered behavior remain unverified. No native build, simulator pass or real-device readiness is claimed. Run20 has now been confirmed failed in its simulator-test phase; build passed and screenshot/attachment export was skipped.
+- Source correction is complete; native verification has no reliable ETA while CI is held for usage control and no local Apple environment is available. A revised estimate can be made when an authorized validation environment and run budget are selected. No background process or test deadline is running.
+
 ## Loss-navigation boundary/accessibility source audit — October 8, 2026, 08:11 ET
 
 - Source review covered no analysis/no loss/all loss, initial/first/last selected

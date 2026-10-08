@@ -8,7 +8,7 @@ import time
 import uuid
 
 from ci_process import Cancellation, CLEANUP_RESERVE, run_supervised, save_json
-from owned_ui_simulator import verified_record, identities, log_json, same_device
+from owned_ui_simulator import verified_record
 
 
 def device_id(value):
@@ -101,27 +101,18 @@ def execute_tests(selected, owned_file, derived, output, cancellation, *, clock=
     if owned.get("bootVerified") is not True or owned.get("state") != "ready":
         raise ValueError("Owned UI simulator has no verified completed boot")
     plan = phases(selected["udid"], owned["udid"], derived, output)
-    plan.insert(1, ("test-unit-ready", ["xcrun", "simctl", "list", "--json"]))
 
     def unchanged(name):
         if verified_record(owned_file, selected) != owned:
             raise ValueError("Owned simulator record changed before " + name)
 
-    def validate_phase(name, prefix):
-        unchanged(name)
-        if name != "test-unit-ready":
-            return None
-        devices = identities(log_json(prefix))
-        runtime, device = devices[owned["udid"]]
-        if not same_device(owned, runtime, device) or device.get("state") != "Booted" or device.get("isAvailable") is not True:
-            raise ValueError("No matching available Booted owned simulator before unit tests")
-        return {"udid": owned["udid"], "identityMatched": True, "bootedObserved": True}
-
-    # The extra observation is inside560s, not a new readiness budget. UI
-    # preserves10s work+20s cleanup for it; both tests use the same fresh device.
+    # UI just exercised this destination. Let xcodebuild resolve the same explicit
+    # UUID for unit tests instead of gating them on a second global simctl query.
+    # Ownership records are revalidated before each launch; destructive cleanup
+    # retains its separate live identity checks. Reserve 120s for unit work in
+    # addition to the shared cleanup allowance; never expand the 560s budget.
     return execute(plan, output, cancellation, clock=clock, runner=runner, validator=validator,
-                   reserves={"test-ui": 30}, timeouts={"test-unit-ready": 10},
-                   before_phase=unchanged, phase_validator=validate_phase)
+                   reserves={"test-ui": 120}, before_phase=unchanged)
 
 
 def main():

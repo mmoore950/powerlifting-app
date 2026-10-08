@@ -115,7 +115,16 @@ private struct OPLSearchView: View {
     @ObservedObject var model: OPLBrowserModel
     @StateObject private var page = OPLPageStore<OPLLifter>()
     @State private var text = ""
+    @State private var displayedSearch: SearchTaskID?
+    private struct SearchTaskID: Equatable {
+        let revision: Int
+        let query: String
+    }
     private var query: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var searchTask: SearchTaskID { SearchTaskID(revision: model.revision, query: query) }
+    private var currentResults: Bool {
+        displayedSearch == searchTask && model.version != nil && page.loadedVersion == model.version
+    }
     var body: some View {
         List {
             Section {
@@ -126,21 +135,27 @@ private struct OPLSearchView: View {
                 if !query.isEmpty, query.count < 2 { Text("Enter at least two characters to search.").font(.caption) }
                 if query.count > 128 { InputErrorView(message: "Use a name prefix of 2 to 128 characters.") }
             }
-            OPLPageStatus(page: page)
-            ForEach(page.items) { lifter in
-                NavigationLink(lifter.name) { OPLHistoryView(model: model, lifter: lifter) }
+            if currentResults {
+                OPLPageStatus(page: page)
+                ForEach(page.items) { lifter in
+                    NavigationLink(lifter.name) { OPLHistoryView(model: model, lifter: lifter) }
+                }
+                if !page.loading, page.error == nil, page.items.isEmpty {
+                    Text("No matching source names.").foregroundStyle(.secondary)
+                }
+                OPLMoreButton(page: page)
+            } else if (2...128).contains(query.count), model.version != nil {
+                ProgressView("Searching lifters")
             }
-            if query.count >= 2, page.loadedVersion != nil, !page.loading, page.error == nil, page.items.isEmpty {
-                Text("No matching source names.").foregroundStyle(.secondary)
-            }
-            OPLMoreButton(page: page)
-        }.task(id: "\(model.revision):\(query)") {
-            guard (2...128).contains(query.count) else {
+        }.task(id: searchTask) {
+            let requestedSearch = searchTask
+            guard (2...128).contains(requestedSearch.query.count) else {
                 await page.reset(client: nil, version: nil, query: nil); return
             }
             await page.reset(client: model.repository, version: model.version,
-                query: OPLQuery(path: "lifters", parameters: ["q": query]),
+                query: OPLQuery(path: "lifters", parameters: ["q": requestedSearch.query]),
                 adoptDataset: model.adoptRecovery, delayNanoseconds: 400_000_000)
+            if !Task.isCancelled, requestedSearch == searchTask { displayedSearch = requestedSearch }
         }.refreshable { await model.refresh() }
     }
 }

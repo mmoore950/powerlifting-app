@@ -49,9 +49,14 @@ jobs:
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.simulator_id }}
         run: bash tools/ci/native-validation.sh test
-      - name: Export both UI screenshots and generated unit attachments
+      - name: Export successful UI screenshots independently
+        if: always()
         timeout-minutes: 2
-        run: bash tools/ci/native-validation.sh screenshots
+        run: bash tools/ci/native-validation.sh screenshots-ui
+      - name: Export successful unit attachments independently
+        if: always()
+        timeout-minutes: 2
+        run: bash tools/ci/native-validation.sh screenshots-unit
       - name: Clean only this run's recorded owned UI simulator
         if: always()
         timeout-minutes: 2

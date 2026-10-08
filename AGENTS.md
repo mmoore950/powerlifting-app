@@ -1,5 +1,9 @@
 # Powerlifting app project instructions
 
+## Current Mac handoff (October 8, 2026)
+
+The five-minute leader automation and Windows worker are paused under the human's usage-control instruction. Do not restart them or dispatch GitHub Actions. The native workflow is manual-only. Continue app work locally on the Mac from `docs/mac-handoff.md`, and record actual Xcode/Simulator results separately from source checks. The project history below records the earlier leader/worker arrangement; it does not override this current handoff.
+
 ## User intent and authority
 
 The human user authorized this arrangement on 2026-10-07 in the leader chat: "you are going to be my leader for this project, and ther is another chat called powerlifting app, which is going to be the worker" and "have the worker begin at ideal reasoning, and when it has a question, it should ask you so it is a loop without me needing to be here."

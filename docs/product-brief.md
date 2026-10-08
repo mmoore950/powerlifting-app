@@ -59,7 +59,7 @@ Default: SwiftUI native iOS app, minimum iOS 17 unless APIs provide a reason to 
 
 Research on data scale and video feasibility should happen early enough to expose architectural blockers before extensive polish. Preserve progress on independent modules if native validation is blocked.
 
-Current environment is Windows and no Swift executable was found on PATH during initial inspection. macOS/Xcode and device access are not yet established. Native build/test execution and App Store signing are explicit future gates; source generation alone does not meet them.
+Local development is on Windows. As of October 8, GitHub macOS CI has built the unsigned app and passed 53 simulator tests, 42 ordinary macOS core tests and a separate actual Swift-to-Node HTTP contract test. Physical-device access, real-video accuracy, production hosting/recurring freshness, signing and release validation remain open gates. See docs/status.md for current evidence and limits.
 
 ## Research sources checked 2026-10-07
 
