@@ -1,5 +1,11 @@
 # Worker status
 
+## Full-rep registry/aggregation proposal
+
+- Scoped `docs/full-rep-window-registry-scope.md` only: explicit one-recording/rep plan and verified native windows, versioned derived registry/coverage/conflict receipt, original analysis/session/model/mode/source identity and absolute integer PTS. BigInt rational overlap discovery preserves exact original component tuples; conflicting raster/component/reference rows require explicit review. No interpolation/cross-window track-ID identity/prediction cherry-picking or scalar metric pooling before policy review. Recording hash groups do not establish subject/session independence; whole-registry hash/group partition checks and explicit permission/group review persist. Development exports cannot be promoted to holdout by aggregation.
+- Proposed bounded64windows/1024rawrecords/30s rep,32MiB selectedJSON/4GiB distinctmedia verification/8MiB derived output; sequential reads, no media copies. Repeated whole-movie packages have material storage cost; explicit common asset root allowed only when recorded basenames/hash checks resolve. No implementation, labels, realreferences or accuracy claim. Source scope completed within5–10min provisional/noharddeadline; implementation35–55min after review, no readiness date until actual multiwindow/native/browser/label coverage evidence.
+- Leader approved UI isolation implementation meanwhile: Medium,20–35min provisional/noharddeadline, one shared560s deadline/cancellation/no-second-launch after exhaustion, exact validated ownedUUID-only cleanup, both result/attachment gates, unchanged job30 and no push/CI until review. Proceed immediately after this scope handoff; full-rep implementation awaits separate decision.
+
 ## UI startup evidence and fresh-simulator proposal
 
 - Actual ninth retained test logs: UIautomation3.14s/idle11.07s/foreground17.63s/firstPlates19s, testpass58.001s and five screenshot activities. Run14: automation17.97s/idle78s/eventloop+animationwarnings138s/firstsnapshot140.09s unfinished. Same recorded OS/Xcode/Swift/SDK/deviceUDID/runtime26.2-build23C54; `git diff4a700f5 c6eb206 -- App Tests/UI` empty. No measured permanent animation/main-thread block or root cause. Core→app-host transition225.492s versus232.082s despite~60s app suite explains why suite durations cannot size overall test phase.
