@@ -171,8 +171,17 @@ private struct OPLHistoryView: View {
 private struct OPLRankingsView: View {
     @ObservedObject var model: OPLBrowserModel
     @StateObject private var page = OPLPageStore<OPLResult>()
-    @State private var sex = "M", equipment = "Raw", event = "SBD", tested = "", metric = "total"
-    @State private var federation = "", from = "", to = "", minimum = "", maximum = "", weightClass = ""
+    @State private var sex = "M"
+    @State private var equipment = "Raw"
+    @State private var event = "SBD"
+    @State private var tested = ""
+    @State private var metric = "total"
+    @State private var federation = ""
+    @State private var from = ""
+    @State private var to = ""
+    @State private var minimum = ""
+    @State private var maximum = ""
+    @State private var weightClass = ""
     @State private var applied = ["sex": "M", "equipment": "Raw", "event": "SBD", "metric": "total"]
     @State private var filterRevision = 0
     var body: some View {

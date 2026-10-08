@@ -1,6 +1,14 @@
 # Worker status
 
-Updated 2026-10-07, 11:14 PM America/New_York. The leader pushed the approved source snapshot to private mmoore950/powerlifting-app and dispatched the first native CI run. That run failed during core XCTest compilation; simulator validation did not run. Native/accuracy/continuing-freshness gates remain pending. Earlier prerequisite notes below are historical and superseded by this checkpoint.
+Updated 2026-10-07, 11:18 PM America/New_York. Second native CI run passed all 42 macOS core XCTest methods and project generation, then failed during simulator app compilation. Simulator tests remain unrun. Native/accuracy/continuing-freshness gates remain pending. Earlier prerequisite notes below are historical and superseded by the latest checkpoint.
+
+## Second native CI diagnostic / SwiftUI state declaration repair
+
+- Actual run: https://github.com/mmoore950/powerlifting-app/actions/runs/37721816453, job `113130961152`, revision `753a0334884a15530e23315540c5b9de63a4b887`. Retrieved completed job logs through the GitHub connector. Runner: macOS 15.7.9 x86_64, Xcode 16.4 (16F6), Apple Swift 6.1.2, iOS simulator SDK 18.5, verified XcodeGen 2.46.0.
+- ACTUAL macOS core test execution: 42 tests, zero failures, 0.878 seconds suite wall time (compile/build separately 36.79 seconds). This confirms the previous fixture identifier repair and core test behavior on this toolchain; it is not a video accuracy or iOS UI result.
+- Project generation and available iPhone 16 simulator selection passed. Unsigned simulator app build failed with exit 65: OPLBrowserView.swift lines 174–175, `property wrapper can only apply to a single variable`. Simulator scheme tests were skipped. Diagnostic summary and artifact upload succeeded (artifact `11525963633`). Job ran approximately 2 minutes 50 seconds, below its 30-minute ceiling.
+- Split the two combined declarations into 11 individual @State properties, preserving names, initial values, bindings, and filter logic. Reviewed wrapper declarations throughout App and Tests; no additional combined wrapped-variable declaration found. Local source/diff and whitespace checks pass; no local Swift/Xcode execution on Windows. Next native run must verify app compilation and app-host/simulator tests.
+- Repair sizing: 5–10 minutes, no hard repair deadline. Next CI result ETA depends on leader push/dispatch and queue; prior run duration is evidence for diagnosis turnaround only, not a guarantee for simulator tests. Re-estimate after the next runner starts/diagnostics. Hard job 30 minutes excludes queue; device/video/hosted-service/scheduled-freshness readiness remains separate.
 
 ## First native CI diagnostic / bounded compiler repair
 
