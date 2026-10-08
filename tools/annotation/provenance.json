@@ -2,7 +2,7 @@
   "upstreamVersion": "2.0.12",
   "upstreamURL": "https://www.robots.ox.ac.uk/~vgg/software/via/via.html",
   "upstreamSHA256": "a225d22d89fd5b901769670fb94d4e117543d748c1c2dd8cf2fa7a4777f08322",
-  "derivativeSHA256": "c574743609f18b388ea6d8667bb0b49c86e15a2f4865cc9a214cdf73b239dfba",
+  "derivativeSHA256": "aeca0a68126509ee0bfd5c6f0efaa044646971c0c72dde0e15d31be7ea6d1def",
   "disabledFunctions": [
     "project_file_add_url_with_input",
     "project_file_add_url_input_done",
@@ -22,6 +22,7 @@
     "Removed remote import/project-load/search-path implementations",
     "Neutralized remote links",
     "Disabled upstream shortcuts to hidden dialogs",
+    "Removed inherited trailing whitespace",
     "Added restrictive CSP",
     "Added explicit local frame/draft labeling controls"
   ],

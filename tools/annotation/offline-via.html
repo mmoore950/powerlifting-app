@@ -43,11 +43,11 @@
     If you do not wish to share this data, you can safely remove the
     javascript code below.
     -->
-    
+
 
 <!-- START: Contents of file: via.css-->
 <style>
-/* 
+/*
   CSS style definitions for VIA 2.x.y
   http://www.robots.ox.ac.uk/~vgg/software/via/
   Author: Abhishek Dutta <adutta@robots.ox.ac.uk>
@@ -5877,7 +5877,7 @@ function img_fn_list_onregex() {
     filter_selected_region_attribute(regex);
     return;
   }
-  
+
   img_fn_list_generate_html( regex );
   img_fn_list.innerHTML = _via_img_fn_list_html.join('');
   img_fn_list_scroll_to_current_file();
@@ -5886,7 +5886,7 @@ function img_fn_list_onregex() {
   if ( regex === '' ) {
     p.selectedIndex = 0;
   } else {
-    if ( p.options[p.selectedIndex].value != 'files_region_attribute' && 
+    if ( p.options[p.selectedIndex].value != 'files_region_attribute' &&
          p.options[p.selectedIndex].value != 'regex' ) {
       var i;
       for ( i=0; i<p.options.length; ++i) {
@@ -5964,7 +5964,7 @@ function filter_selected_region_attribute(property_entry) {
   var selected_attribute = propArray[0];
   var selected_value = propArray[1];
   if ( selected_value === "\"\"") selected_value = "";
-  
+
   _via_img_fn_list_html = [];
   _via_img_fn_list_img_index_list = [];
   _via_img_fn_list_html.push('<ul>');

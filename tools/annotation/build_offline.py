@@ -41,12 +41,12 @@ panel = (ROOT / 'offline_panel.html').read_text(encoding='utf-8')
 html = html.replace('<div class="top_panel" id="ui_top_panel">', '<div class="top_panel" id="ui_top_panel">\n' + panel, 1)
 strict_json = (ROOT / 'strict_json.mjs').read_text(encoding='utf-8').replace('export function parseStrictJSON', 'function parseStrictJSON')
 html = html.replace('</body>', '<script>\n' + strict_json + '\n' + (ROOT / 'offline_panel.js').read_text(encoding='utf-8') + '\n</script>\n</body>', 1)
-output = html.encode('utf-8')
+output = ('\n'.join(line.rstrip() for line in html.splitlines())+'\n').encode('utf-8')
 (ROOT / 'offline-via.html').write_bytes(output)
 (ROOT / 'provenance.json').write_text(json.dumps(dict(upstreamVersion='2.0.12',
     upstreamURL='https://www.robots.ox.ac.uk/~vgg/software/via/via.html', upstreamSHA256=PIN,
     derivativeSHA256=hashlib.sha256(output).hexdigest(), disabledFunctions=removed,
     changes=['Removed Google Analytics script', 'Removed remote import/project-load/search-path implementations',
-             'Neutralized remote links', 'Disabled upstream shortcuts to hidden dialogs', 'Added restrictive CSP', 'Added explicit local frame/draft labeling controls'],
+             'Neutralized remote links', 'Disabled upstream shortcuts to hidden dialogs', 'Removed inherited trailing whitespace', 'Added restrictive CSP', 'Added explicit local frame/draft labeling controls'],
     license='BSD-2-Clause; full upstream notice retained in both HTML files'), indent=2)+'\n', encoding='utf-8')
 print('Offline derivative SHA256', hashlib.sha256(output).hexdigest())

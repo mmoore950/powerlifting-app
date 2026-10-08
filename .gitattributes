@@ -1,3 +1,4 @@
 * text=auto eol=lf
-/tools/annotation/vendor/via-2.0.12.html -text
+# Retain pinned upstream bytes, including its four original trailing-space lines.
+/tools/annotation/vendor/via-2.0.12.html -text whitespace=-blank-at-eol
 /tools/annotation/offline-via.html -text
