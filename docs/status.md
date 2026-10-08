@@ -1,5 +1,25 @@
 # Worker status
 
+## Loss-navigation boundary/accessibility source audit — October 8, 2026, 08:11 ET
+
+- Source review covered no analysis/no loss/all loss, initial/first/last selected
+  episode, cleared/replaced scope and seek failure. Initial action is Review first
+  loss; previous/next respect finite run bounds. No-loss wording does not assert
+  correct identification. Navigation is disabled during pending seek so a rapid
+  second Next cannot accidentally restart from first after temporary selection
+  clearing. Internal newer-request guards remain tested by delayed source cases.
+- Added distinct Loss review header, expanding count text and vertical actions for
+  large-text space. Clear now names analysis when it also discards tracking, and
+  manual-reference wording explains replacement of current analysis plus rep-start
+  seeding. These are concrete same-feature omissions; no new detector or workflow.
+- UTF-8/whitespace checked; no tests added for reversible wording/layout changes.
+  Actual VoiceOver/Dynamic Type/player rendering, all new70 expected methods and
+  generated seek regressions still uncompiled/unrun. Source audit complete within
+  5–10min provisional/noharddeadline; review next, response ETA unknown. Run20
+  earlier68 split tests remain active; outcome15–22min after07:59start provisional,
+  test10/job30 limits, exports/cleanup pending. No push/retry/newCI. Accuracy,
+  production/private/device/release readiness remain separate and undated.
+
 ## Video loss-review navigation source checkpoint — October 8, 2026, 08:09 ET
 
 - Approved implementation derives consecutive explicit lost-sample runs, retaining

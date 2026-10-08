@@ -56,17 +56,18 @@ struct VideoAnalysisView: View {
                         if let analysis = model.analysisResult {
                             Text("\(analysis.mode.rawValue) · \(analysis.timestamps.count) actual-time frames · \(analysis.gaps) abstaining frames · \(analysis.elapsed.formatted(.number.precision(.fractionLength(1)))) s processing").font(.caption)
                             Text("Automatic shape/continuity scores are uncalibrated heuristics. Manual mode uses Vision confidence; neither establishes bar identity accuracy.").font(.caption)
+                            Text("Loss review").font(.caption.bold()).accessibilityAddTraits(.isHeader)
                             Text("\(model.lossRuns.reduce(0) { $0 + $1.frameCount }) abstaining frames in \(model.lossRuns.count) consecutive loss episodes.")
-                                .font(.caption).accessibilityAddTraits(.isHeader)
+                                .font(.caption).lineLimit(nil).fixedSize(horizontal: false, vertical: true)
                             if !model.lossRuns.isEmpty {
-                                HStack {
+                                VStack(alignment: .leading) {
                                     Button("Previous loss") {
                                         if let index = model.previousLossRunIndex { model.reviewLossRun(index) }
-                                    }.disabled(model.previousLossRunIndex == nil || model.processing || model.importing)
+                                    }.disabled(model.previousLossRunIndex == nil || model.processing || model.importing || model.lossSeekPending)
                                         .accessibilityHint("Pauses and seeks to the first observed sample of the previous loss episode.")
                                     Button(model.selectedLossRunIndex == nil ? "Review first loss" : "Next loss") {
                                         if let index = model.nextLossRunIndex { model.reviewLossRun(index) }
-                                    }.disabled(model.nextLossRunIndex == nil || model.processing || model.importing)
+                                    }.disabled(model.nextLossRunIndex == nil || model.processing || model.importing || model.lossSeekPending)
                                         .accessibilityHint("Pauses and seeks to the first observed sample of the next loss episode. Does not restart tracking.")
                                 }.buttonStyle(.bordered)
                                 if model.lossSeekPending { ProgressView("Seeking to loss sample") }
@@ -81,7 +82,10 @@ struct VideoAnalysisView: View {
                         }
                         Text("Pause and tap the near-side bar hub to mark a manual reference point. These points are annotations, not automatic tracking. Points across gaps are never joined into an invented path.").font(.caption)
                         Text("\(model.trace?.samples.filter { $0.kind == .manualReference }.count ?? 0) manual reference points")
-                        Button("Clear reference points", action: model.clearTrace)
+                        Text("Adding a manual reference point replaces the current analysis. To run Manual Vision, first mark the selected rep start.").font(.caption)
+                        Button(model.analysisResult == nil ? "Clear reference points" : "Clear analysis and reference points", action: model.clearTrace)
+                            .disabled(model.processing)
+                            .accessibilityHint("Clears the current trace and loss-review selection.")
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Development annotation export").font(.headline)
                             Text("Select a window of at most one second. The export includes the WHOLE imported movie, native frames and analysis; labels are still required.").font(.caption)
