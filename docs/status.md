@@ -1,5 +1,25 @@
 # Worker status
 
+## Run20 dispatched; video loss-review gap scope — October 8, 2026, 08:01 ET
+
+- Reviewed cb26556475b1080ff58796b826c76f2220e1efe4 pushed exactly to existing
+  private main, excluding dirty leader docs. One authenticated manual dispatch at
+  07:59 ET: run37773690035/job113299195700. Browser verified full SHA and queued
+  status; connector reports setup in progress. Screenshot retained and embedded.
+  Expected 68 source tests, actual Apple result/export/cleanup pending; no retry,
+  billing/access or timeout change. Result 15–22min afterstart provisional,
+  build8/test10/job30 limits with queue/toolchain/boot uncertainty.
+- Bounded imported-video inspection found aggregate abstaining-frame count without
+  timeline loss navigation. Scope-only video-loss-review-scope.md proposes derived
+  consecutive explicit lost-sample runs and Previous/Next review at retained actual
+  timestamps with seek-completion/lifetime guards. No interpolation/reacquisition/
+  detector/accuracy assertion; existing manual taps remain reference annotations.
+- Scope complete within5–10min provisional/noharddeadline; leader decision next,
+  response ETA unavailable until response. If approved, source20–35min/noharddeadline,
+  uncertain AVPlayer seek lifetime/generated-check feasibility. Run20 outcome and
+  successful exact inventory/exports/generated reconstruction take priority.
+  Real video/private/device/production/release gates remain separate and undated.
+
 ## Shared profile filter editor and interaction source audit — October 8, 2026, 07:57 ET
 
 - Recovered and completed the approved shared six-field editor in profile and
