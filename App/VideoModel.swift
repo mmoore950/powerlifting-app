@@ -24,7 +24,7 @@ final class VideoModel: ObservableObject {
     private let predictionExporter = BarPredictionExporter()
     private var analysisTask: Task<Void, Never>?
     private var analysisGeneration = 0
-    private var observer: Any?
+    private var observerCleanup: (@MainActor @Sendable () -> Void)?
     private var generation = 0
     private var playerGeneration = 0
     private var playbackRequest = 0
@@ -54,9 +54,10 @@ final class VideoModel: ObservableObject {
                 let next = AVPlayer(url: imported.url)
                 player = next
                 let playerRequest = playerGeneration
-                observer = next.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 30), queue: .main) { [weak self] time in
+                let observer = next.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 30), queue: .main) { [weak self] time in
                     Task { @MainActor [weak self] in self?.tick(time.seconds, generation: playerRequest) }
                 }
+                observerCleanup = { next.removeTimeObserver(observer) }
                 itemObservation = next.currentItem?.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
                     guard item.status == .failed else { return }
                     let message = item.error?.localizedDescription ?? "Video playback failed."
@@ -187,12 +188,14 @@ final class VideoModel: ObservableObject {
     private func detachPlayer() {
         pause()
         playerGeneration += 1; itemObservation = nil
-        if let observer, let player { player.removeTimeObserver(observer) }
-        observer = nil; player?.replaceCurrentItem(with: nil); player = nil
+        observerCleanup?(); observerCleanup = nil
+        player?.replaceCurrentItem(with: nil); player = nil
     }
     deinit {
         importTask?.cancel()
         analysisTask?.cancel()
-        if let observer, let player { player.removeTimeObserver(observer) }
+        // Deinit may run off the main actor. Retain only the Sendable cleanup closure,
+        // which owns the matching player/token and performs removal on the main actor.
+        if let observerCleanup { Task { @MainActor in observerCleanup() } }
     }
 }

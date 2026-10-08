@@ -1,6 +1,14 @@
 # Worker status
 
-Updated 2026-10-07, 11:18 PM America/New_York. Second native CI run passed all 42 macOS core XCTest methods and project generation, then failed during simulator app compilation. Simulator tests remain unrun. Native/accuracy/continuing-freshness gates remain pending. Earlier prerequisite notes below are historical and superseded by the latest checkpoint.
+Updated 2026-10-07, 11:23 PM America/New_York. Third native CI run passed all 42 macOS core XCTest methods and project generation, then exposed a VideoModel deinitializer actor-isolation error during simulator app compilation. Simulator tests remain unrun. Native/accuracy/continuing-freshness gates remain pending. Earlier prerequisite notes below are historical and superseded by the latest checkpoint.
+
+## Third native CI diagnostic / video observer cleanup repair
+
+- Actual run: https://github.com/mmoore950/powerlifting-app/actions/runs/37722175385, job `113132118604`, revision `be7ead646f2e9bdcaf74dcc5f4f078453f18b90c`. Completed logs fetched through the GitHub connector. Xcode 16.4 / Apple Swift 6.1.2. All 42 macOS core XCTest tests passed again, zero failures, 0.718 seconds suite wall time. Project generation and simulator selection passed.
+- Simulator app build failed at VideoModel.swift line 196: main actor-isolated `player` cannot be referenced from nonisolated deinit. The grouped @State declaration error did not recur. Scheme tests were skipped. Summary/artifact upload succeeded (artifact `11525724838`); job approximately 2 minutes 30 seconds, below the 30-minute ceiling.
+- Store a Sendable main-actor cleanup closure capturing the exact registered player/time-observer token. Normal detach invokes it synchronously and clears it before dropping the player. Deinit cancels tasks and schedules that closure on the main actor without capturing self or reading published player state. The existing observer callback stays weak and generation-guarded. Deinit cleanup is queued, not guaranteed to finish before deinit returns; explicit detach still removes the observer before replacing/removing media.
+- Actual local verification: diff/ownership inspection and Git whitespace checks pass. No local Apple compilation, playback, deinit execution or simulator test claim. Next Apple run must confirm actor compatibility and execute simulator/app-host tests; real-media lifecycle checks remain a separate gate.
+- Repair estimate at diagnosis was 10–20 minutes, no hard deadline. Next native result ETA awaits leader push/dispatch/runner start; prior quick compiler failures do not establish simulator test duration. Hard job 30 minutes excludes queue, and CI success is separate from device/video accuracy/hosted-service/scheduled-freshness readiness.
 
 ## Second native CI diagnostic / SwiftUI state declaration repair
 
