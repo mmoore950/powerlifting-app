@@ -1,5 +1,24 @@
 # Worker status
 
+## Run19 dispatched; profile accessibility source audit — October 8, 2026, 07:40 ET
+
+- Exact reviewed b06eb77497d1f9551709954c974b59ef6f951b96 pushed to private main,
+  one existing manual workflow dispatched. Browser verified run37771657886/fullSHA,
+  initially queued then in progress; screenshot retained in ignored run directory.
+  Dirty leader docs and later accessibility edits excluded. No retry/settings/billing
+  or access change. Actual expected67iOS/5selector/29orchestration gates pending.
+- Source accessibility audit adds full wrapping source-name header (inline title
+  alone could truncate), expanding filter/metric/meet text, one combined spoken
+  metric+value+meet label using kilograms versus unitless DOTS score, and clear
+  additional-filter button hint. No actual VoiceOver/Dynamic Type/render/Apple
+  pass claimed; no test added for reversible labels. UTF-8/whitespace checked.
+- Accessibility checkpoint complete within5–10min/noharddeadline. Leader review
+  next; response ETA unknown. Run19 result15–22min afteractualstart provisional,
+  with queue/boot/install uncertainty; build8/test10/job30 bounds retained. On
+  success exact67/bothmanifests/generated reconstruction takespriority; onfailure
+  actual cleanup/outer/periodic receipts before correction. Native/runtime benefit,
+  private accuracy, production freshness and release gates remain separate.
+
 ## SDK-matched selector source checkpoint — October 8, 2026, 07:39 ET
 
 - Approved implementation requires numerical measured SDK receipt (setup tee,

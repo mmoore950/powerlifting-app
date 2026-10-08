@@ -4,8 +4,9 @@ October 8, 2026, 07:26 ET. Run
 [37768042551](https://github.com/mmoore950/powerlifting-app/actions/runs/37768042551),
 job113280411298, exact revision `348d37e02e0424ae6682464ea563ef599e34ba17`.
 Build-phase and simulator cleanup steps failed; iOS tests and exports skipped.
-Final job upload/post-checkout steps succeeded; final job completion was still
-being reported when these receipts were read. No repeated dispatch occurred.
+Final job upload/post-checkout steps succeeded. Later browser summary verified
+Failure, total duration18m25s, and the owned simulator cleanup step exceeded its
+two-minute workflow limit. This does not establish simulator deletion. No repeated dispatch occurred.
 
 ## Actual evidence
 

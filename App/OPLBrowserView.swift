@@ -166,7 +166,10 @@ private struct OPLHistoryView: View {
     }
     var body: some View {
         List {
-            Section { OPLFreshnessView(model: model)
+            Section {
+                Text(lifter.name).font(.headline).lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+                OPLFreshnessView(model: model)
                 Text("Exact source name; suffixes are preserved. Source names do not establish identity across renamed entries.").font(.caption)
             }
             Section("Profile best performances") {
@@ -178,9 +181,10 @@ private struct OPLHistoryView: View {
                     Text("Yes").tag("yes")
                     Text("Not designated").tag("not-designated")
                 }
-                ForEach(scope.keys.sorted(), id: \.self) { key in Text(scopeLabel(key)).font(.caption) }
+                ForEach(scope.keys.sorted(), id: \.self) { key in Text(scopeLabel(key)).font(.caption).lineLimit(nil).fixedSize(horizontal: false, vertical: true) }
                 if scope.keys.contains(where: { !["sex", "equipment", "event", "tested"].contains($0) }) {
                     Button("Clear additional ranking filters") { scope = scope.filter { ["sex", "equipment", "event", "tested"].contains($0.key) } }
+                        .accessibilityHint("Keeps the selected sex category, equipment, event and tested designation.")
                 }
                 Text("Best eligible values across this entire dataset for these filters; not ratified records. Lift bests can come from different meets and do not add up to a competition total.").font(.caption)
                 OPLPageStatus(page: summary, retryLabel: "Retry profile")
@@ -188,9 +192,10 @@ private struct OPLHistoryView: View {
                     ForEach(["total", "squat", "bench", "deadlift", "dots"], id: \.self) { metric in
                         if let best = profile.bests.first(where: { $0.metric == metric }), let value = best.value {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("\(metric == "dots" ? "DOTS" : metric.capitalized): \(value.formatted(.number.precision(.fractionLength(0...2))))\(metric == "dots" ? "" : " kg")").font(.headline)
-                                Text("\(best.result.meet) · \(best.result.date) · \(best.result.federation)").font(.caption)
-                            }
+                                Text("\(metric == "dots" ? "DOTS" : metric.capitalized): \(value.formatted(.number.precision(.fractionLength(0...2))))\(metric == "dots" ? "" : " kg")").font(.headline).lineLimit(nil).fixedSize(horizontal: false, vertical: true)
+                                Text("\(best.result.meet) · \(best.result.date) · \(best.result.federation)").font(.caption).lineLimit(nil).fixedSize(horizontal: false, vertical: true)
+                            }.accessibilityElement(children: .combine)
+                                .accessibilityLabel(bestAccessibilityLabel(best, value: value))
                         } else { Text("\(metric == "dots" ? "DOTS" : metric.capitalized): no eligible value for these filters").font(.caption) }
                     }
                 } else if consistentVersion, summary.items.isEmpty, !summary.loading, summary.error == nil {
@@ -223,6 +228,12 @@ private struct OPLHistoryView: View {
                 await summary.reset(client: model.repository, version: model.version,
                     query: OPLQuery(path: "lifters/\(lifter.lifterID)/summary", parameters: scope), adoptDataset: model.adoptRecovery)
             }.refreshable { await model.refresh() }
+    }
+    private func bestAccessibilityLabel(_ best: OPLProfileSummary.Best, value: Double) -> String {
+        let metric = best.metric == "dots" ? "DOTS score" : best.metric
+        let amount = value.formatted(.number.precision(.fractionLength(0...2)))
+        let unit = best.metric == "dots" ? "" : " kilograms"
+        return "Best \(metric), \(amount)\(unit), \(best.result.meet), \(best.result.date), \(best.result.federation)"
     }
     private func scopeLabel(_ key: String) -> String {
         let labels = ["sex": "Source sex category", "equipment": "Equipment", "event": "Event",
