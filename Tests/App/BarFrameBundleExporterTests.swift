@@ -217,11 +217,11 @@ final class BarFrameBundleExporterTests: XCTestCase {
             snapshots.append((name, bytes, type))
         }
         for (name, bytes, type) in snapshots {
-            XCTContext.runActivity(named: "Generated native fixture: " + name) { activity in
-                let attachment = XCTAttachment(data: bytes, uniformTypeIdentifier: type)
-                attachment.name = name; attachment.lifetime = .keepAlways
-                activity.add(attachment)
-            }
+            // Associate with this test explicitly. An async continuation need not
+            // have the thread-local current context required by runActivity.
+            let attachment = XCTAttachment(data: bytes, uniformTypeIdentifier: type)
+            attachment.name = name; attachment.lifetime = .keepAlways
+            add(attachment)
         }
     }
 
