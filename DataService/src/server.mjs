@@ -18,9 +18,9 @@ export function serve({root,port=8787,queryOptions={}}) {
       else if(url.pathname==='/lifters') result=await pool.run('search',params,{signal:controller.signal});
       else if(url.pathname==='/rankings') result=await pool.run('rankings',params,{signal:controller.signal});
       else {
-        const match=url.pathname.match(/^\/lifters\/([A-Za-z0-9_-]+)\/results$/);
+        const match=url.pathname.match(/^\/lifters\/([A-Za-z0-9_-]+)\/(results|summary)$/);
         if(!match) {response.writeHead(404);return response.end();}
-        if(params.id) throw new Error('DUPLICATE_PARAMETER');result=await pool.run('history',{...params,id:match[1]},{signal:controller.signal});
+        if(params.id) throw new Error('DUPLICATE_PARAMETER');result=await pool.run(match[2]==='summary'?'summary':'history',{...params,id:match[1]},{signal:controller.signal});
       }
       if(response.destroyed) return;
       response.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});

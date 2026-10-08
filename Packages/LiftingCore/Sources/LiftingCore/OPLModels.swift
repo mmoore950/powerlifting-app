@@ -89,6 +89,58 @@ public struct OPLResult: Codable, Identifiable, Sendable {
     }
 }
 
+/// Bounded full-snapshot summary; different metric winners may come from different meets.
+public struct OPLProfileSummary: Codable, Identifiable, Sendable {
+    public struct Best: Codable, Identifiable, Sendable {
+        public let metric: String
+        public let result: OPLResult
+        public var id: String { metric }
+        public var value: Double? {
+            switch metric {
+            case "total": return result.total
+            case "squat": return result.squat
+            case "bench": return result.bench
+            case "deadlift": return result.deadlift
+            case "dots": return result.dots
+            default: return nil
+            }
+        }
+    }
+    public let name: String
+    public let lifterID: String
+    public let bests: [Best]
+    public let scope: [String: String]
+    public var id: String { lifterID }
+    enum CodingKeys: String, CodingKey { case name = "Name", lifterID = "lifterId", bests, scope }
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        lifterID = try container.decode(String.self, forKey: .lifterID)
+        bests = try container.decode([Best].self, forKey: .bests)
+        scope = try container.decode([String: String].self, forKey: .scope)
+        let allowed = Set(["sex", "equipment", "event", "tested", "federation", "from", "to", "bodyweightMin", "bodyweightMax", "weightClass"])
+        guard bests.count <= 5, Set(bests.map(\.metric)).count == bests.count,
+              !name.isEmpty, lifterID == Data(name.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: ""), Set(scope.keys).isSubset(of: allowed),
+              ["sex", "equipment", "event"].allSatisfy({ !(scope[$0] ?? "").isEmpty }),
+              bests.allSatisfy({ best in
+                  best.result.name == name && best.result.lifterID == lifterID &&
+                  best.result.sex == scope["sex"] && best.result.equipment == scope["equipment"] &&
+                  best.result.event == scope["event"] &&
+                  best.value.map { $0.isFinite && $0 > 0 } == true
+              }) else { throw OPLError.invalidResponse }
+    }
+}
+
+/// Preserve ranking drill-down filters while dropping its selected metric.
+public enum OPLProfileScope {
+    public static func parameters(from filters: [String: String]) -> [String: String] {
+        let keys = Set(["sex", "equipment", "event", "tested", "federation", "from", "to", "bodyweightMin", "bodyweightMax", "weightClass"])
+        var scope = filters.filter { keys.contains($0.key) }
+        for (key, value) in ["sex": "M", "equipment": "Raw", "event": "SBD"] where scope[key] == nil { scope[key] = value }
+        return scope
+    }
+}
+
 public struct OPLPage<Item: Codable & Sendable>: Codable, Sendable {
     public let version: String
     public let results: [Item]

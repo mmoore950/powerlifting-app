@@ -150,20 +150,91 @@ private struct OPLHistoryView: View {
     @ObservedObject var model: OPLBrowserModel
     let lifter: OPLLifter
     @StateObject private var page = OPLPageStore<OPLResult>()
+    @StateObject private var summary = OPLPageStore<OPLProfileSummary>()
+    @State private var scope: [String: String]
+    init(model: OPLBrowserModel, lifter: OPLLifter, filters: [String: String] = [:]) {
+        self.model = model; self.lifter = lifter
+        _scope = State(initialValue: OPLProfileScope.parameters(from: filters))
+    }
+    private struct ProfileTaskID: Equatable {
+        let revision: Int
+        let scope: [String: String]
+    }
+    private var summaryTask: ProfileTaskID { ProfileTaskID(revision: model.revision, scope: scope) }
+    private var consistentVersion: Bool {
+        model.version != nil && summary.loadedVersion == model.version && page.loadedVersion == model.version
+    }
     var body: some View {
         List {
-            Section { OPLFreshnessView(model: model); Text("All rows for this exact source name. Divisions can produce repeated meet rows.").font(.caption) }
-            OPLPageStatus(page: page)
-            ForEach(page.items) { result in OPLResultRow(result: result) }
-            if !page.loading, page.error == nil, model.version != nil, page.items.isEmpty {
-                Text("No results for this source name in the selected dataset.")
+            Section { OPLFreshnessView(model: model)
+                Text("Exact source name; suffixes are preserved. Source names do not establish identity across renamed entries.").font(.caption)
             }
-            OPLMoreButton(page: page)
+            Section("Profile best performances") {
+                profilePicker("Source sex category", key: "sex", choices: ["M", "F", "Mx"])
+                profilePicker("Equipment", key: "equipment", choices: ["Raw", "Wraps", "Single-ply", "Multi-ply", "Unlimited", "Straps"])
+                profilePicker("Event", key: "event", choices: ["SBD", "BD", "SD", "SB", "S", "B", "D"])
+                Picker("Tested designation", selection: Binding(get: { scope["tested"] ?? "" }, set: { scope["tested"] = $0.isEmpty ? nil : $0 })) {
+                    Text("Any designation").tag("")
+                    Text("Yes").tag("yes")
+                    Text("Not designated").tag("not-designated")
+                }
+                ForEach(scope.keys.sorted(), id: \.self) { key in Text(scopeLabel(key)).font(.caption) }
+                if scope.keys.contains(where: { !["sex", "equipment", "event", "tested"].contains($0) }) {
+                    Button("Clear additional ranking filters") { scope = scope.filter { ["sex", "equipment", "event", "tested"].contains($0.key) } }
+                }
+                Text("Best eligible values across this entire dataset for these filters; not ratified records. Lift bests can come from different meets and do not add up to a competition total.").font(.caption)
+                OPLPageStatus(page: summary)
+                if consistentVersion, let profile = summary.items.first, profile.scope == scope {
+                    ForEach(["total", "squat", "bench", "deadlift", "dots"], id: \.self) { metric in
+                        if let best = profile.bests.first(where: { $0.metric == metric }), let value = best.value {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("\(metric.capitalized): \(value.formatted(.number.precision(.fractionLength(0...2))))\(metric == "dots" ? "" : " kg")").font(.headline)
+                                Text("\(best.result.meet) · \(best.result.date) · \(best.result.federation)").font(.caption)
+                            }
+                        } else { Text("\(metric.capitalized): no eligible value for these filters").font(.caption) }
+                    }
+                } else if consistentVersion, summary.items.isEmpty, !summary.loading, summary.error == nil {
+                    Text("This source name is absent from the selected dataset.")
+                }
+                if let previous = summary.items.first, previous.scope != scope {
+                    Text("Profile filters changed. Previous best values are hidden while results update.").font(.caption)
+                }
+                if !consistentVersion, !summary.items.isEmpty || !page.items.isEmpty {
+                    Text("Profile and history are updating to the same dataset. Previous values are hidden.").font(.caption)
+                }
+            }
+            Section("Meet history · all categories") {
+                Text("All rows for this exact source name, independent of profile filters. Divisions can produce repeated meet rows.").font(.caption)
+                OPLPageStatus(page: page)
+                if page.loadedVersion == model.version {
+                    ForEach(page.items) { result in OPLResultRow(result: result) }
+                    if !page.loading, page.error == nil, model.version != nil, page.items.isEmpty {
+                        Text("No results for this source name in the selected dataset.")
+                    }
+                    OPLMoreButton(page: page)
+                }
+            }
         }.navigationTitle(lifter.name).navigationBarTitleDisplayMode(.inline)
             .task(id: model.revision) {
                 await page.reset(client: model.repository, version: model.version,
                     query: OPLQuery(path: "lifters/\(lifter.lifterID)/results"), adoptDataset: model.adoptRecovery)
+            }
+            .task(id: summaryTask) {
+                await summary.reset(client: model.repository, version: model.version,
+                    query: OPLQuery(path: "lifters/\(lifter.lifterID)/summary", parameters: scope), adoptDataset: model.adoptRecovery)
             }.refreshable { await model.refresh() }
+    }
+    private func scopeLabel(_ key: String) -> String {
+        let labels = ["sex": "Source sex category", "equipment": "Equipment", "event": "Event",
+            "tested": "Tested designation", "federation": "Federation", "from": "From date", "to": "Through date",
+            "bodyweightMin": "Minimum bodyweight (kg)", "bodyweightMax": "Maximum bodyweight (kg)", "weightClass": "Exact source weight class"]
+        let value = scope[key] ?? ""
+        return "\(labels[key] ?? key): \(key == "tested" && value == "not-designated" ? "not designated" : value)"
+    }
+    private func profilePicker(_ title: String, key: String, choices: [String]) -> some View {
+        Picker(title, selection: Binding(get: { scope[key] ?? choices[0] }, set: { scope[key] = $0 })) {
+            ForEach(choices, id: \.self) { Text($0).tag($0) }
+        }
     }
 }
 
@@ -212,7 +283,7 @@ private struct OPLRankingsView: View {
             OPLPageStatus(page: page)
             ForEach(Array(page.items.enumerated()), id: \.element.id) { index, result in
                 NavigationLink {
-                    OPLHistoryView(model: model, lifter: OPLLifter(name: result.name, lifterID: result.lifterID))
+                    OPLHistoryView(model: model, lifter: OPLLifter(name: result.name, lifterID: result.lifterID), filters: applied)
                 } label: {
                     VStack(alignment: .leading) {
                         Text("\(index + 1). \(result.name)").font(.headline)

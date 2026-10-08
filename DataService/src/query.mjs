@@ -4,7 +4,7 @@ import path from 'node:path';
 import {readJSON,now} from './storage.mjs';
 import {kgColumns,normalize} from './schema.mjs';
 import {withSnapshot} from './snapshot-lifecycle.mjs';
-import {rankingsPlan} from './rankings-plan.mjs';
+import {rankingsPlan,performanceMetrics} from './rankings-plan.mjs';
 
 const id=name=>Buffer.from(name,'utf8').toString('base64url');
 const exactName=value=>{
@@ -38,6 +38,7 @@ export async function dataset(root) {
 export function prepareQuery(kind,params={}) {
   const allowed={search:['q','limit','cursor','version'],history:['id','limit','cursor','version'],
     rankings:['sex','equipment','event','tested','federation','from','to','bodyweightMin','bodyweightMax','weightClass','metric','limit','cursor','version']};
+  allowed.summary=['id',...allowed.rankings.filter(key=>!['metric','cursor'].includes(key))];
   if(!allowed[kind]) throw new Error('UNKNOWN_QUERY');
   for(const key of Object.keys(params)) if(!allowed[kind].includes(key)) throw new Error(`UNSUPPORTED_FILTER: ${key}`);
   const limit=Number(params.limit??25);
@@ -78,6 +79,15 @@ export function executeQuery(root,{kind,params,limit,signature,offset},{info,ver
       const name=exactName(params.id);
       rows=db.prepare('SELECT * FROM results WHERE Name=? ORDER BY Date DESC,row_id DESC LIMIT ? OFFSET ?')
         .all(name,limit+1,offset).map(record);
+    } else if(kind==='summary') {
+      const name=exactName(params.id);
+      const bests=[];
+      for(const metric of Object.keys(performanceMetrics)) {
+        const plan=rankingsPlan({...params,metric},1,0);
+        const winner=db.prepare(`SELECT * FROM results WHERE Name=? AND ${plan.where} ORDER BY \"${plan.metric}\" DESC,Date DESC,row_id DESC LIMIT 1`).get(name,...plan.args.slice(0,-2));
+        if(winner) bests.push({metric,result:record(winner)});
+      }
+      rows=db.prepare('SELECT Name FROM lifters WHERE Name=?').get(name)?[{Name:name,lifterId:id(name),bests,scope:Object.fromEntries(Object.entries(params).filter(([key])=>!['id','version','limit'].includes(key)))}]:[];
     } else {
       const plan=rankingsPlan(params,limit+1,offset,{narrow:narrowRankings});
       rows=db.prepare(plan.sql).all(...plan.args).map(row=>{delete row.person_rank;return record(row);});
@@ -85,6 +95,6 @@ export function executeQuery(root,{kind,params,limit,signature,offset},{info,ver
     const more=rows.length>limit; const results=rows.slice(0,limit);
     const nextCursor=more?Buffer.from(JSON.stringify({version,kind,signature,offset:offset+limit})).toString('base64url'):null;
     return {version,source:info.source,results,nextCursor,durationMs:performance.now()-started,
-      ...(kind==='rankings'?{label:'Best performance per source lifter name in this filtered dataset; not ratified records.'}:{})};
+      ...(['rankings','summary'].includes(kind)?{label:'Best performance per source lifter name in this filtered dataset; not ratified records.'}:{})};
   } finally {db.close();}
 }

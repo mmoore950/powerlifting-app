@@ -1,7 +1,7 @@
 import {date,centi,enums} from './schema.mjs';
 
 /** Shared filter semantics. Narrow projection is an explicit experimental option, not the serving default. */
-export function rankingsPlan(params,limit,offset,{narrow=false}={}) {
+export function performanceFilters(params) {
   const filters=[],args=[];
   for(const [parameter,column] of [['sex','Sex'],['equipment','Equipment'],['event','Event']]) {
     if(!enums[column].includes(params[parameter])) throw new Error(`RANKINGS_REQUIRES_VALID_${parameter.toUpperCase()}`);
@@ -22,8 +22,14 @@ export function rankingsPlan(params,limit,offset,{narrow=false}={}) {
   }
   if(params.bodyweightMin&&params.bodyweightMax&&centi(String(params.bodyweightMin))>centi(String(params.bodyweightMax))) throw new Error('INVALID_BODYWEIGHT_RANGE');
   if(params.weightClass!==undefined){if(params.weightClass!=='+'&&!/^-?\d+(?:\.\d{1,2})?\+?$/.test(params.weightClass)) throw new Error('INVALID_WEIGHT_CLASS');filters.push('WeightClassKg=?');args.push(params.weightClass);}
-  const metrics={total:'TotalKg',squat:'Best3SquatKg',bench:'Best3BenchKg',deadlift:'Best3DeadliftKg',dots:'Dots'};
-  const metric=metrics[params.metric??'total'];if(!metric) throw new Error('INVALID_METRIC');
+  return {filters,args};
+}
+
+export const performanceMetrics={total:'TotalKg',squat:'Best3SquatKg',bench:'Best3BenchKg',deadlift:'Best3DeadliftKg',dots:'Dots'};
+
+export function rankingsPlan(params,limit,offset,{narrow=false}={}) {
+  const {filters,args}=performanceFilters(params);
+  const metric=performanceMetrics[params.metric??'total'];if(!metric) throw new Error('INVALID_METRIC');
   filters.push(`"${metric}">0`,`Place NOT IN ('DQ','DD','NS')`,`Sanctioned IN ('Yes','')`);
   const where=filters.join(' AND ');
   const sql=narrow?`WITH best AS (

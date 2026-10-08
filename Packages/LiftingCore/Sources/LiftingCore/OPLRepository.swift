@@ -106,6 +106,14 @@ public actor OPLRepository {
             guard page.results.count <= 25, (page.nextCursor?.count ?? 0) <= 2_048 else {
                 throw OPLError.invalidResponse
             }
+            if Item.self == OPLProfileSummary.self {
+                let parts = query.path.split(separator: "/")
+                guard parts.count == 3, parts[2] == "summary", page.results.count <= 1,
+                      page.nextCursor == nil, page.results.allSatisfy({ item in
+                          guard let summary = item as? OPLProfileSummary else { return false }
+                          return summary.lifterID == String(parts[1]) && summary.scope == query.parameters
+                      }) else { throw OPLError.invalidResponse }
+            }
         }
     }
     /// One expiration recovery per caller-approved transaction. Never reuses the expired cursor.
@@ -132,7 +140,7 @@ public actor OPLRepository {
     }
     private func endpoint(_ path: String, parameters: [String: String]) throws -> URL {
         let parts = path.split(separator: "/", omittingEmptySubsequences: false)
-        let history = parts.count == 3 && parts[0] == "lifters" && parts[2] == "results"
+        let history = parts.count == 3 && parts[0] == "lifters" && ["results", "summary"].contains(parts[2])
             && !parts[1].isEmpty && parts[1].allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }
         guard ["dataset", "lifters", "rankings"].contains(path) || history else {
             throw OPLError.invalidEndpoint
