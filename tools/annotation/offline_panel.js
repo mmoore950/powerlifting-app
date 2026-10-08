@@ -45,7 +45,7 @@
   }
   const guard=fn=>async event=>{try{await fn(event);}catch(e){status('Error: '+e.message);console.error(e);}};
   el('hub_bundle').addEventListener('change',guard(async event=>{
-    const file=event.target.files[0];if(!file)return;
+    const file=event.target.files[0];event.target.value='';if(!file)return;
     assert(file.size<=48*1024*1024,'Bundle exceeds 48 MiB');
     assert(!dirty,'Save your current draft before loading another bundle');
     const b=parseStrictJSON(await file.text()),l=b.ledger;
@@ -85,7 +85,8 @@
     observation('Local bundle imported; embedded images only');
   }));
   el('hub_draft').addEventListener('change',guard(async event=>{
-    assert(bundle,'Load the matching frame bundle first');const file=event.target.files[0];if(!file)return;assert(file.size<=4*1024*1024,'Draft exceeds 4 MiB');
+    const file=event.target.files[0];event.target.value='';if(!file)return;
+    assert(bundle,'Load the matching frame bundle first');assert(file.size<=4*1024*1024,'Draft exceeds 4 MiB');
     assert(!dirty,'Save your current draft before reloading another draft');
     const d=parseStrictJSON(await file.text());assert(d.schemaVersion===1&&d.ledgerSha256===bundle.ledgerSha256,'Foreign/changed draft ledger');
     checkMetadata(d.viaMetadata);_via_img_metadata=d.viaMetadata;redraw();dirty=false;sync();status('Draft reloaded.');observation('Local draft reloaded');

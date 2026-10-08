@@ -34,6 +34,14 @@ html, keyboard_count = re.subn(r'^function _via_init_keyboard_handlers\(\) \{.*?
     'function _via_init_keyboard_handlers() { /* Visible local controls own keyboard interaction. */ }', html, flags=re.M | re.S)
 if keyboard_count != 1:
     raise ValueError('Expected pinned keyboard initialization')
+# The local panel already occupies its actual header height. VIA's doubled
+# subtraction can become negative when the request-observation panel is open,
+# leaving invalid canvas dimensions and stretching the previous image size.
+height_expression = 'var image_panel_height = de.clientHeight - 2*ui_top_panel.offsetHeight;'
+if html.count(height_expression) != 1:
+    raise ValueError('Expected pinned image panel height calculation')
+html = html.replace(height_expression,
+    'var image_panel_height = Math.max(1, de.clientHeight - ui_top_panel.offsetHeight - 24);', 1)
 csp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'"
 html = html.replace('<head>', '<head>\n<meta http-equiv="Content-Security-Policy" content="' + csp + '">', 1)
 html = html.replace('<title>VGG Image Annotator</title>', '<title>Offline hub annotation · development</title>', 1)
@@ -48,6 +56,6 @@ output = ('\n'.join(line.rstrip() for line in html.splitlines())+'\n').encode('u
     upstreamURL='https://www.robots.ox.ac.uk/~vgg/software/via/via.html', upstreamSHA256=PIN,
     derivativeSHA256=hashlib.sha256(output).hexdigest(), disabledFunctions=removed,
     changes=['Removed Google Analytics script', 'Removed remote import/project-load/search-path implementations',
-             'Neutralized remote links', 'Disabled upstream shortcuts to hidden dialogs', 'Removed inherited trailing whitespace', 'Added restrictive CSP', 'Added explicit local frame/draft labeling controls', 'Added shared native producer contract validation'],
+             'Neutralized remote links', 'Disabled upstream shortcuts to hidden dialogs', 'Removed inherited trailing whitespace', 'Added restrictive CSP', 'Added explicit local frame/draft labeling controls', 'Added shared native producer contract validation', 'Bounded available image height using actual local header height'],
     license='BSD-2-Clause; full upstream notice retained in both HTML files'), indent=2)+'\n', encoding='utf-8')
 print('Offline derivative SHA256', hashlib.sha256(output).hexdigest())
