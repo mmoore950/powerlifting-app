@@ -41,6 +41,8 @@ The hook encodes the **same accepted CGImage** consumed by the detector and pres
 
 Native bounds are ≤1 second/16 accepted frames/32 MiB PNG payload/48 MiB bundle; source ≤500 MiB. Existing analysis 120-second and per-hash 60-second checks remain **cooperative**, not external kill deadlines. Publication uses a fresh partial sibling directory and a final local rename. Failure/revocation/source mismatch removes completion files and retains partial PNG diagnostics. A retry requires a fresh destination. Import/removal revokes publication before changing clip generation and waits for cleanup before deleting the managed copy. Cancellation after the final rename preserves the already completed historical bundle; it cannot make that bundle refer to the replacement clip.
 
+This initial limit covers a short window, not a whole rep. Additional windows need distinct clip IDs while preserving the same recording/subject/session group and partition; no stitching or registry merge is implemented. Completed directories omit the source movie. Preserve its managed copy before clearing it, or copy the unchanged original under the ledger's recorded relative filename into a separate local asset root and verify the hash. Concrete remaining integration steps are in [native-annotation-integration-review.md](native-annotation-integration-review.md).
+
 After successful capture, use `bundle.json` in the same labeling steps below. The native UI branch displays the declared producer/session and requires the CLI to verify the actual prediction/media files before scoring. Browser import is not producer authentication or an accuracy result. Do not edit/re-hash the ledger: UUIDs and hashes bind accidental mismatches; they are not signatures against fabricated bundles.
 
 ## Prepare one explicitly selected clip
@@ -109,6 +111,8 @@ Only use this branch for a completed native directory, after labeling its captur
 The adapter checks the native decoder contract and bounds, hashes actual media/PNGs/prediction JSON, validates the unchanged prediction schema, and matches clip hash/ID, mode/model, dimensions, sample count and **exact timestamp components**. Equivalent rational times with changed components are rejected here. Use `--existing` for cross-clip partition checks as above. Native companion reports record the analysis/session/prediction association. Exports remain exclusive; a new correction gets a new filename.
 
 This output can be supplied as `--manifest` to `tools/score-video-traces.mjs`, with this bundle's `prediction.json` as `--predictions`, the same `--asset-root`, and a fresh `--output`. The scorer verifies media automatically. Retain the adapter report with any score. Synthetic references still count as synthetic; producer association alone does not establish near-hub accuracy, independent subject coverage, device performance or readiness.
+
+The scorer does not read the companion report or independently enforce the native-producer contract. Use the successful adapter export and its exact associated prediction file; a valid reference schema alone does not establish native provenance. The scorer reports diagnostics and always leaves `accuracyGatePassed:false`.
 
 ## Developer verification and remaining gate
 

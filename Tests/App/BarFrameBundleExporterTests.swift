@@ -145,6 +145,8 @@ final class BarFrameBundleExporterTests: XCTestCase {
         let runs = try XCTUnwrap(predictions["runs"] as? [[String: Any]])
         let samples = try XCTUnwrap(runs.first?["samples"] as? [[String: Any]])
         let bundle = try object(destination.appendingPathComponent("bundle.json"))
+        let embeddedImages = try XCTUnwrap(bundle["images"] as? [String: String])
+        XCTAssertEqual(embeddedImages.count, frames.count)
         let ledgerText = try XCTUnwrap(bundle["ledgerText"] as? String)
         XCTAssertEqual(Data(ledgerText.utf8), try Data(contentsOf: destination.appendingPathComponent("ledger.json")))
         XCTAssertEqual(bundle["ledgerSha256"] as? String, digest(Data(ledgerText.utf8)))
@@ -167,6 +169,10 @@ final class BarFrameBundleExporterTests: XCTestCase {
             let filename = try XCTUnwrap(frames[index]["filename"] as? String)
             let png = try Data(contentsOf: destination.appendingPathComponent("frames").appendingPathComponent(filename))
             XCTAssertEqual(frames[index]["sha256"] as? String, digest(png))
+            let frameID = try XCTUnwrap(frames[index]["id"] as? String)
+            let embedded = try XCTUnwrap(embeddedImages[frameID])
+            XCTAssertTrue(embedded.hasPrefix("data:image/png;base64,"))
+            XCTAssertEqual(Data(base64Encoded: String(embedded.dropFirst("data:image/png;base64,".count))), png)
             let pngSource = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil))
             let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(pngSource, 0, nil))
             let actual = try await oracle.image(at: CMTime(value: try XCTUnwrap(Int64(timestamp.value)), timescale: timestamp.timescale))
@@ -177,7 +183,12 @@ final class BarFrameBundleExporterTests: XCTestCase {
             XCTAssertEqual(pixels.count, expected.count)
             let maximumDifference = zip(pixels, expected).map { abs(Int($0.0)-Int($0.1)) }.max() ?? 0
             XCTAssertLessThanOrEqual(maximumDifference, 2, "PNG/oracle raster mismatch")
-            XCTAssertGreaterThan(Int(pixels.max() ?? 0)-Int(pixels.min() ?? 0), 50, "Asymmetric fixture lost contrast")
+            // Exclude opaque alpha, which would make a uniform gray image appear contrasted.
+            var minimumRGB = 255, maximumRGB = 0
+            for offset in pixels.indices where offset % 4 != 3 {
+                minimumRGB = min(minimumRGB, Int(pixels[offset])); maximumRGB = max(maximumRGB, Int(pixels[offset]))
+            }
+            XCTAssertGreaterThan(maximumRGB-minimumRGB, 50, "Asymmetric fixture lost RGB contrast")
         }
     }
 
