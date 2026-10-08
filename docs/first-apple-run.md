@@ -1,6 +1,14 @@
 # First Apple run: diagnostic handoff
 
-Reconciled October 7, 2026, 4:05 PM ET. This pack consolidates source and existing evidence; it does not execute or accept native features. Windows has no Swift/Xcode, the human has no Mac, and hosted macOS is the prepared route. **Zero native builds/tests, zero observed evaluation clips, no production scheduler or reachable HTTPS service.**
+## Current checkpoint — October 8, 2026
+
+The first-run prerequisites below were resolved through the authorized private `mmoore950/powerlifting-app` repository and hosted macOS validation. Latest run [37726403071](https://github.com/mmoore950/powerlifting-app/actions/runs/37726403071), revision `58f3d63`, passed unsigned simulator build, 42 macOS core tests and 53 simulator methods (42 core, 10 app-host, 1 UI), including all four synthetic media lifecycle checks. Five named screenshot files were exported; previous default-screen visual review was accepted separately. Evidence and limits are in `status.md` and `native-validation.md`.
+
+Zero observed real-lift evaluation clips, no production scheduler/reachable approved HTTPS service, and no real-device/signing/release evidence remain current limitations. The proposed next native/service boundary scope is in `native-http-boundary-scope.md`; it is not implemented yet. Readiness timing remains blocked on these prerequisites and scope decisions. Latest native job took about 10m50, test phase 7m20, with hard test 10 minutes/job 30 minutes; these process bounds do not estimate research readiness.
+
+## Historical first-run handoff — superseded where noted above
+
+The remainder preserves the October 7, 2026, 4:05 PM ET pre-run handoff and its source inventory/prerequisite reasoning. Its zero-native, no-remote/approval and unrun-test statements describe that earlier checkpoint, not current status. At that time this pack consolidated source and evidence without executing native features; Windows had no Swift/Xcode and hosted macOS was the prepared route.
 
 ## Prerequisites and ownership
 
