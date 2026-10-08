@@ -23,8 +23,8 @@ Review all five screenshots for clipping, unreadable text, navigation visibility
 ## Build and numerical execution
 
 The build phase uses `build-for-testing` on the selected existing simulator. The
-new test orchestrator runs UI first on one owned fresh simulator, then all non-UI
-scheme targets on the original destination, using `test-without-building` and the
+test orchestrator runs UI first and then all non-UI scheme targets on the same
+verified fresh owned simulator, using `test-without-building` and the
 same scheme/derived data. The full scheme and both export gates remain. This follows [Apple's xcodebuild
 documentation](https://developer.apple.com/library/archive/technotes/tn2339/_index.html).
 The unchanged outer limits are build 8 minutes, test 10 minutes and job 30 minutes.
@@ -49,7 +49,8 @@ Apple's [killpg documentation](https://developer.apple.com/library/archive/docum
 distinguishes EPERM from ESRCH. The runner's transient EPERM kernel cause is unknown.
 
 Top-level `build-compile.process.json`, `ui-build-boot.process.json`, `ui-build-bootstatus.process.json`,
-`ui-build-ready.process.json`, `test-ui.process.json` and `test-unit.process.json`
+`ui-build-ready.process.json`, `test-ui.process.json`, `test-unit-ready.process.json`
+and `test-unit.process.json`
 receipts preserve the command,
 PID/group, reason, signals, child exit and observed cleanup outcome in the plain
 diagnostic artifact. A hard external kill can leave a `running` receipt; that is
@@ -74,6 +75,18 @@ write-failure case proves actual direct-child termination/wait, not POSIX escala
 On POSIX that same case uses a TERM-ignoring child and requires actual TERM→KILL,
 group absence and direct-child wait despite repeated persistence faults.
 Source/local success is separate from macOS/Xcode execution.
+
+The current same-device test source is an unproven experiment after run17 UI
+passed but non-UI on the original destination timed out before app-host methods.
+No CoreSimulator root cause is established. The original-vs-owned identity check
+still requires a fresh device; both test commands use the verified owned UDID.
+One live matching available Booted inventory before non-UI is capped10s and
+reserves20s for cleanup, inside the existing560s deadline. UI reserves those30s,
+so its nominal child allowance is510s. Parsing/identity checks and cancellation
+consume that same budget; failure prevents unit launch. No reset/reboot/retry.
+Separate result/attachment ownership and all source-required methods remain.
+See native-same-owned-device-scope.md and native-run17-evidence.md. This source
+has not executed on Apple; run17 did not produce a successful exported manifest.
 Supervisor test receipts/stdout/stderr are retained as unique top-level diagnostic
 files, with separate SIGTERM/SIGINT suffixes. Error receipts include the actual
 exception traceback and operation; a failed cleanup assertion does not erase them.
@@ -86,7 +99,8 @@ second command. `test-phases.json` records the aggregate and partial/unrun phase
 An outer observation failure stops only the owned supervisor wrapper and reports
 unverified child cleanup, never successful cleanup of escaped sessions/services.
 
-The current named XCTest source inventory is42core+19app-host+1UI=62 iOS methods;
+The current named XCTest source inventory is42core+20app-host+1UI=63 iOS methods;
+the additional generated two-window method is source only and absent fromrun17.
 the HTTP test is entirely macOS-only, so iOS has no expected HTTP skip. Its separate
 actual HTTP gate and macOS opt-in skip remain. `check-test-inventory.py` requires
 the split passing IDs to match current iOS sources exactly once, with no omitted,
@@ -137,8 +151,12 @@ periodic evidence remain source-only until a reviewed run. Actual local process
 checks observe running supervisor/outer periodic updates before final receipts,
 file bounds, diagnostic I/O failure without abandoning the child, stdout/nonzero
 and direct-child wait, plus injected fresh Shutdown,
-compile/boot/readiness ordering/failure/cancellation/reservations. Windows23pass/
-1POSIXskip is not new simctl/macOS proof.
+compile/boot/readiness ordering/failure/cancellation/reservations. Current source
+adds five same-owned-device/readiness regressions: matching Booted identity,
+failed/changed/unavailable/runtime inventory, immutable ownership, parsing and
+prelaunch cancellation/deadline consume the shared budget. Windows final29methods
+28pass/1POSIXskip in9.082s is not new simctl/macOS proof. Earlier24 methods passed
+on macOS inrun17; new five methods remain unrun on that platform.
 Top-level test receipts/logs are retained before temporary fixture cleanup.
 
 1. Run `swift test --package-path Packages/LiftingCore`: fixture cases and 120 deterministic small-inventory comparisons against exhaustive full count-vector enumeration, plus invalid inputs/decoding/selection/cap cases.

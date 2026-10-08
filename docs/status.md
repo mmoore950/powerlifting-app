@@ -1,5 +1,28 @@
 # Worker status
 
+## Same verified warm device source checkpoint — October 8, 2026, 07:06 ET
+
+- Approved experiment implemented in native-test-phases.py: both test commands
+  use verified fresh owned UDID, original-vs-owned provenance check retained.
+  UI → one bounded live available/Booted matching inventory → non-UI. All record
+  reads/phase parsing/validation and cancellation consume same560s budget; check
+  capped10s+20cleanup, UI reserves30s (nominal510s child). Changed ownership,
+  failed/unavailable/shutdown/wrongidentity inventory, cancellation/deadline
+  refuse unit launch. Separate bundles/exports/exact63source IDs retained.
+- ACTUAL final Windows29orchestration methods28pass/1POSIXskip in9.082s;
+  five new methods include injected simctl/readiness budgets, postparse ownership
+  mutation, parsing/prelaunch deadline/cancellation refusal. Existing actual8s
+  periodic-progress child and owned supervision checks retained. Python compilation
+  and whitespace passed.159 bounded ignored evidence files retained locally;
+  simctl/Xcode/newPOSIX methods unrun here. No reset/retry or budget expansion.
+- Source complete before15–25min provisional estimate/noharddeadline. Next
+  decision leader source review before any push/CI; review timing unknown,
+  re-estimate on response. Future native15–22min afterstart provisional with
+  queue/startup/install uncertainty, hardbuild8/test10/job30 unchanged. Unproven
+  diagnostic experiment, no CoreSimulator405cause/cure or accuracy readiness.
+  Generated walkthrough checkpoint complete; private-browser/provider/device/
+  native-byte export/realaccuracy gates remain separate and unaccepted.
+
 ## Generated walkthrough checkpoint — October 8, 2026, 07:07 ET
 
 - User-facing generated-annotation-walkthrough.md reuses the existing3frame

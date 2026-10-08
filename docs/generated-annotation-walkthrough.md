@@ -5,10 +5,10 @@ real lift or near-side hub truth. It does not establish native tracking accuracy
 
 ## Open the demo
 
-Open [the local annotation page](/C:/codex/powerlifting-app/tools/annotation/offline-via.html)
+Open [the local annotation page](C:/codex/powerlifting-app/tools/annotation/offline-via.html)
 in a browser that permits local HTML. Choose **Load frame bundle**, then select
-[this generated bundle](/C:/codex/powerlifting-app/artifacts/annotation-demo-20261008-recovery/bundle.json).
-The corresponding [demo folder](/C:/codex/powerlifting-app/artifacts/annotation-demo-20261008-recovery)
+[this generated bundle](C:/codex/powerlifting-app/artifacts/annotation-demo-20261008-recovery/bundle.json).
+The corresponding [demo folder](C:/codex/powerlifting-app/artifacts/annotation-demo-20261008-recovery)
 contains the unchanged ledger, frames and example drafts. Keep them together.
 
 This page was previously exercised through loopback HTML serving. Direct local
@@ -28,7 +28,7 @@ new browser acceptance.
 
 The earlier actual browser exercise captured this screen:
 
-![Generated example with visible point and original timestamp](/C:/codex/powerlifting-app/artifacts/annotation-demo-20261008-recovery/synthetic-zoom-roundtrip.jpg)
+![Generated example with visible point and original timestamp](C:/codex/powerlifting-app/artifacts/annotation-demo-20261008-recovery/synthetic-zoom-roundtrip.jpg)
 
 The unchanged first timestamp is `9007199254740993/600`, epoch0. **Next frame**
 shows `9007199254740994/600`. Preserve these strings; do not calculate replacement
@@ -52,13 +52,13 @@ The saved examples let you compare results without claiming a new browser run:
 
 | Example | Reviewed label | Original point | Other frames |
 | --- | --- | --- | --- |
-|[Visible draft](/C:/codex/powerlifting-app/artifacts/annotation-demo-20261008-recovery/reviewed-visible-draft.json)|visible, uncertainty2|(100,150), normalized(0.25,0.75)|unreviewed|
-|[Occluded draft](/C:/codex/powerlifting-app/artifacts/annotation-demo-20261008-recovery/reviewed-occluded-draft.json)|occluded|none|unreviewed|
+|[Visible draft](C:/codex/powerlifting-app/artifacts/annotation-demo-20261008-recovery/reviewed-visible-draft.json)|visible, uncertainty2|(100,150), normalized(0.25,0.75)|unreviewed|
+|[Occluded draft](C:/codex/powerlifting-app/artifacts/annotation-demo-20261008-recovery/reviewed-occluded-draft.json)|occluded|none|unreviewed|
 
-On October8 at approximately07:07ET, both examples were rerun through the existing
+On October8 at approximately07:04ET, both examples were rerun through the existing
 strict adapter against actual local source/PNG bytes and the unchanged ledger.
 Fresh outputs are in
-[the walkthrough result folder](/C:/codex/powerlifting-app/artifacts/annotation-walkthrough-20261008).
+[the walkthrough result folder](C:/codex/powerlifting-app/artifacts/annotation-walkthrough-20261008).
 Each report has1synthetic annotation,0observed annotations,2unreviewed frames,
 `development-only` and `nativeParityVerified:false`. The original exact timestamp
 survived; visible normalized coordinates and occluded null point/uncertainty were

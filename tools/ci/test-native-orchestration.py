@@ -66,7 +66,7 @@ class NativeOrchestrationTests(unittest.TestCase):
         self.assertIn("-only-testing:PowerliftingAppUITests", calls[0][0])
         self.assertIn("-skip-testing:PowerliftingAppUITests", calls[1][0])
         self.assertIn(f"platform=iOS Simulator,id={FRESH}", calls[0][0])
-        self.assertIn(f"platform=iOS Simulator,id={SHARED}", calls[1][0])
+        self.assertIn(f"platform=iOS Simulator,id={FRESH}", calls[1][0])
         self.assertIn(str(self.root / "test-ui.xcresult"), calls[0][0])
         self.assertIn(str(self.root / "test-unit.xcresult"), calls[1][0])
         self.assertEqual(self.evidence()["elapsedSeconds"], 70)
@@ -335,6 +335,119 @@ class SimulatorOwnershipTests(unittest.TestCase):
     def build(self, runner, clock, cancellation=None):
         return build_module.execute_build(self.selected, self.root / "owned-ui-simulator.json", self.root / "derived",
                                           self.root, cancellation or Cancellation(), clock=clock, runner=runner)
+
+    def prepare_ready_for_tests(self):
+        self.assertEqual(self.create(), 0)
+        owned_file = self.root / "owned-ui-simulator.json"
+        record = json.loads(owned_file.read_text())
+        record.update(bootRequested=True, bootVerified=True, state="ready")
+        save_json(owned_file, record); self.devices[FRESH]["state"] = "Booted"; self.calls.clear()
+        return owned_file
+
+    def test_same_owned_device_test_phases_preserve_budget_inventory_and_separate_results(self):
+        owned = self.prepare_ready_for_tests(); clock = Clock(); calls = []
+        def runner(command, timeout, prefix, cancel):
+            calls.append((prefix.name, timeout, command))
+            clock.now += {"test-ui": 380, "test-unit-ready": 5, "test-unit": 100}[prefix.name]
+            if command[0] == "xcrun": return self.runner(command, timeout, prefix, cancel)
+            return {"exitCode": 0, "launched": True}
+        validated = []
+        def validate(): validated.append(True); return {"exactInventory": True}
+        code = phases_module.execute_tests(self.selected, owned, self.root / "derived", self.root, Cancellation(),
+            runner=runner, clock=clock, validator=validate)
+        self.assertEqual(code, 0); self.assertEqual(validated, [True])
+        self.assertEqual([(n,t) for n,t,_ in calls], [("test-ui",510),("test-unit-ready",10),("test-unit",155)])
+        for index in [0,2]: self.assertIn(f"platform=iOS Simulator,id={FRESH}", calls[index][2])
+        self.assertIn(str(self.root / "test-ui.xcresult"), calls[0][2])
+        self.assertIn(str(self.root / "test-unit.xcresult"), calls[2][2])
+        self.assertIn("-only-testing:PowerliftingAppUITests", calls[0][2])
+        self.assertIn("-skip-testing:PowerliftingAppUITests", calls[2][2])
+        receipt = json.loads((self.root / "test-phases.json").read_text())
+        self.assertEqual(receipt["elapsedSeconds"],485); self.assertEqual(receipt["budgetSeconds"],560)
+        self.assertTrue(receipt["phases"][1]["validation"]["bootedObserved"])
+        self.assertEqual(verified_record(owned,self.selected)["selectedUDID"],SHARED)
+
+    def test_unit_inventory_failure_unavailable_shutdown_missing_or_changed_identity_never_launches_unit(self):
+        owned = self.prepare_ready_for_tests(); original = self.devices[FRESH].copy()
+        for condition in ["failed", "shutdown", "unavailable", "name", "type", "runtime", "missing", "invalid-json"]:
+            with self.subTest(condition=condition):
+                self.devices[FRESH] = original.copy(); calls=[]
+                def runner(command, timeout, prefix, cancel):
+                    calls.append(prefix.name)
+                    if prefix.name != "test-unit-ready": return {"exitCode":0,"launched":True}
+                    if condition == "failed": return {"exitCode":124,"launched":True}
+                    if condition == "shutdown": self.devices[FRESH]["state"]="Shutdown"
+                    if condition == "unavailable": self.devices[FRESH]["isAvailable"]=False
+                    if condition == "name": self.devices[FRESH]["name"]="Changed owner"
+                    if condition == "type": self.devices[FRESH]["deviceTypeIdentifier"]="Changed type"
+                    if condition == "missing": del self.devices[FRESH]
+                    result=self.runner(command,timeout,prefix,cancel)
+                    if condition == "runtime":
+                        payload=self.inventory();payload['devices']={'com.apple.CoreSimulator.SimRuntime.iOS-18-5':payload['devices'][RUNTIME]}
+                        prefix.with_name(prefix.name+'.log').write_text(json.dumps(payload))
+                    if condition == "invalid-json": prefix.with_name(prefix.name+'.log').write_text('{')
+                    return result
+                code=phases_module.execute_tests(self.selected,owned,self.root/'derived',self.root,Cancellation(),runner=runner,clock=Clock())
+                self.assertEqual(code,124 if condition=='failed' else 125)
+                self.assertEqual(calls,['test-ui','test-unit-ready'])
+
+    def test_changed_owned_record_after_ui_or_inventory_refuses_following_child(self):
+        owned = self.prepare_ready_for_tests(); original=json.loads(owned.read_text())
+        for phase in ['test-ui','test-unit-ready']:
+            save_json(owned,original);calls=[]
+            def runner(command, timeout, prefix, cancel):
+                calls.append(prefix.name)
+                if command[0]=='xcrun': result=self.runner(command,timeout,prefix,cancel)
+                else: result={'exitCode':0,'launched':True}
+                if prefix.name==phase:
+                    save_json(owned,{**original,'bootVerified':False})
+                return result
+            self.assertEqual(phases_module.execute_tests(self.selected,owned,self.root/'derived',self.root,Cancellation(),runner=runner,clock=Clock()),125)
+            self.assertEqual(calls,['test-ui'] if phase=='test-ui' else ['test-ui','test-unit-ready'])
+        # An unready record or reused original destination is refused prelaunch.
+        with self.assertRaises(ValueError): phases_module.execute_tests(self.selected,owned,self.root,self.root,Cancellation(),runner=runner)
+        save_json(owned,{**original,'udid':SHARED})
+        with self.assertRaises(ValueError): phases_module.execute_tests(self.selected,owned,self.root,self.root,Cancellation(),runner=runner)
+        # Mutation after inventory parsing must still be caught at unit prelaunch.
+        save_json(owned,original);calls=[];parse=phases_module.log_json
+        def mutate_after_parse(prefix):
+            value=parse(prefix);save_json(owned,{**original,'bootVerified':False});return value
+        def successful(command,timeout,prefix,cancel):
+            calls.append(prefix.name)
+            return self.runner(command,timeout,prefix,cancel) if command[0]=='xcrun' else {'exitCode':0,'launched':True}
+        with patch.object(phases_module,'log_json',side_effect=mutate_after_parse):
+            self.assertEqual(phases_module.execute_tests(self.selected,owned,self.root/'derived',self.root,Cancellation(),runner=successful,clock=Clock()),125)
+        self.assertEqual(calls,['test-ui','test-unit-ready'])
+
+    def test_inventory_parsing_cancellation_and_deadline_are_inside_shared_test_budget(self):
+        owned=self.prepare_ready_for_tests()
+        for condition in ['cancelled','deadline']:
+            clock=Clock();cancel=Cancellation();calls=[];parse=phases_module.log_json
+            def runner(command,timeout,prefix,cancellation):
+                calls.append(prefix.name)
+                if command[0]=='xcrun':return self.runner(command,timeout,prefix,cancellation)
+                return {'exitCode':0,'launched':True}
+            def expensive_parse(prefix):
+                value=parse(prefix)
+                if condition=='cancelled':cancel.request(signal.SIGTERM)
+                else:clock.now+=561
+                return value
+            with patch.object(phases_module,'log_json',side_effect=expensive_parse):
+                code=phases_module.execute_tests(self.selected,owned,self.root/'derived',self.root,cancel,runner=runner,clock=clock)
+            self.assertEqual(code,143 if condition=='cancelled' else 124)
+            self.assertEqual(calls,['test-ui','test-unit-ready'])
+            receipt=json.loads((self.root/'test-phases.json').read_text());self.assertFalse(receipt['phases'][2]['launched'])
+
+    def test_ownership_prelaunch_validation_cannot_use_stale_budget_or_cancelled_allowance(self):
+        plan=phases_module.phases(SHARED,FRESH,self.root,self.root)
+        for condition in ['cancelled','deadline']:
+            clock=Clock();cancel=Cancellation();calls=[]
+            def before(name):
+                if condition=='cancelled':cancel.request(signal.SIGTERM)
+                else:clock.now+=561
+            def unexpected(*args):calls.append(args);self.fail('Stale prelaunch allowance launched a child')
+            code=phases_module.execute(plan,self.root,cancel,clock=clock,runner=unexpected,before_phase=before)
+            self.assertEqual(code,143 if condition=='cancelled' else 124);self.assertEqual(calls,[])
 
     def test_build_then_readiness_shares_440_seconds_and_preserves_future_cleanup(self):
         self.assertEqual(self.create(), 0); self.calls.clear(); clock = Clock(); budgets = []
