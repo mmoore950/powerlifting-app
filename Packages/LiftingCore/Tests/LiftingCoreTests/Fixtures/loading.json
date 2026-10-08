@@ -1,0 +1,15 @@
+[
+  {"name":"225 pound reference","target":"225","targetUnit":"lb","bar":"45","barUnit":"lb","collar":"0","inventoryUnit":"lb","plates":[[45000,2]],"closest":"225","lower":"225","upper":"225","resultUnit":"lb","counts":[[45000,2]]},
+  {"name":"140 kilogram reference","target":"140","targetUnit":"kg","bar":"20","barUnit":"kg","collar":"0","inventoryUnit":"kg","plates":[[25000,1],[20000,1],[10000,1],[5000,1]],"closest":"140","lower":"140","upper":"140","resultUnit":"kg","counts":[[25000,1],[20000,1],[10000,1],[5000,1]]},
+  {"name":"competition collars each","target":"145","targetUnit":"kg","bar":"20","barUnit":"kg","collar":"2.5","inventoryUnit":"kg","plates":[[25000,1],[20000,1],[10000,1],[5000,1]],"closest":"145","lower":"145","upper":"145","resultUnit":"kg","counts":[[25000,1],[20000,1],[10000,1],[5000,1]]},
+  {"name":"kilogram target pound plates","target":"100","targetUnit":"kg","bar":"45","barUnit":"lb","collar":"0","inventoryUnit":"lb","plates":[[45000,2]],"closest":"225","lower":"135","upper":"225","resultUnit":"lb","counts":[[45000,2]]},
+  {"name":"pound target kilogram plates","target":"225","targetUnit":"lb","bar":"20","barUnit":"kg","collar":"0","inventoryUnit":"kg","plates":[[20000,2],[1000,1]],"closest":"102","lower":"102","upper":null,"resultUnit":"kg","counts":[[20000,2],[1000,1]]},
+  {"name":"below bar","target":"10","targetUnit":"kg","bar":"20","barUnit":"kg","collar":"0","inventoryUnit":"kg","plates":[[5000,1]],"closest":"20","lower":null,"upper":"20","resultUnit":"kg","counts":[]},
+  {"name":"above all available","target":"100","targetUnit":"kg","bar":"20","barUnit":"kg","collar":"0","inventoryUnit":"kg","plates":[[5000,1]],"closest":"30","lower":"30","upper":null,"resultUnit":"kg","counts":[[5000,1]]},
+  {"name":"non greedy inventory","target":"12","targetUnit":"kg","bar":"0","barUnit":"kg","collar":"0","inventoryUnit":"kg","plates":[[4000,1],[3000,2]],"closest":"12","lower":"12","upper":"12","resultUnit":"kg","counts":[[3000,2]]},
+  {"name":"equidistant prefers lower","target":"25","targetUnit":"kg","bar":"20","barUnit":"kg","collar":"0","inventoryUnit":"kg","plates":[[5000,1]],"closest":"20","lower":"20","upper":"30","resultUnit":"kg","counts":[]},
+  {"name":"same total fewest plates","target":"12","targetUnit":"kg","bar":"0","barUnit":"kg","collar":"0","inventoryUnit":"kg","plates":[[6000,1],[3000,2]],"closest":"12","lower":"12","upper":"12","resultUnit":"kg","counts":[[6000,1]]},
+  {"name":"same total larger plates","target":"12","targetUnit":"kg","bar":"0","barUnit":"kg","collar":"0","inventoryUnit":"kg","plates":[[4000,1],[3000,2],[2000,1]],"closest":"12","lower":"12","upper":"12","resultUnit":"kg","counts":[[4000,1],[2000,1]]},
+  {"name":"fractional small plates","target":"20.5","targetUnit":"kg","bar":"20","barUnit":"kg","collar":"0","inventoryUnit":"kg","plates":[[250,1]],"closest":"20.5","lower":"20.5","upper":"20.5","resultUnit":"kg","counts":[[250,1]]},
+  {"name":"zero available pairs","target":"50","targetUnit":"kg","bar":"20","barUnit":"kg","collar":"0","inventoryUnit":"kg","plates":[[10000,0]],"closest":"20","lower":"20","upper":null,"resultUnit":"kg","counts":[]}
+]

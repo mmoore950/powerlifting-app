@@ -1,0 +1,59 @@
+name: Native validation (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: powerlifting-native-validation
+  cancel-in-progress: false
+
+jobs:
+  native:
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out selected revision
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Capture toolchain and install verified XcodeGen
+        timeout-minutes: 5
+        run: bash tools/ci/native-validation.sh setup
+      - name: Test Foundation core on macOS
+        timeout-minutes: 8
+        run: bash tools/ci/native-validation.sh core
+      - name: Generate project and choose an available iPhone simulator
+        id: simulator
+        timeout-minutes: 2
+        run: bash tools/ci/native-validation.sh prepare
+      - name: Unsigned simulator build
+        timeout-minutes: 8
+        env:
+          SIMULATOR_ID: ${{ steps.simulator.outputs.simulator_id }}
+        run: bash tools/ci/native-validation.sh build
+      - name: Run core and app-host tests through the iOS simulator scheme
+        timeout-minutes: 10
+        env:
+          SIMULATOR_ID: ${{ steps.simulator.outputs.simulator_id }}
+        run: bash tools/ci/native-validation.sh test
+      - name: Summarize diagnostic evidence
+        if: always()
+        run: bash tools/ci/native-validation.sh summary
+      - name: Preserve logs and result bundles
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/native-ci/
+          if-no-files-found: warn
+          retention-days: 3
+          compression-level: 6
+          include-hidden-files: false

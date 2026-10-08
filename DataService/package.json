@@ -1,0 +1,24 @@
+{
+  "name": "powerlifting-data-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "refresh": "node src/cli.mjs refresh",
+    "serve": "node src/cli.mjs serve",
+    "query": "node src/cli.mjs query"
+  },
+  "dependencies": {
+    "crc-32": "1.2.2",
+    "csv-parse": "7.0.3",
+    "yauzl": "3.4.0"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "yazl": "3.3.1"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Local bar hub reference manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "coordinateSpace", "clips"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "coordinateSpace": { "const": "upright-normalized-top-left" },
+    "clips": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/clip" } }
+  },
+  "$defs": {
+    "point": {
+      "type": "object", "additionalProperties": false, "required": ["x", "y"],
+      "properties": { "x": { "type": "number", "minimum": 0, "maximum": 1 }, "y": { "type": "number", "minimum": 0, "maximum": 1 } }
+    },
+    "time": {
+      "description": "Actual sample presentation timestamp, not frame index divided by nominal FPS. Int64 value is a decimal string to preserve precision.",
+      "type": "object", "additionalProperties": false, "required": ["value", "timescale", "epoch"],
+      "properties": { "value": { "type": "string", "pattern": "^-?[0-9]+$" }, "timescale": { "type": "integer", "minimum": 1, "maximum": 2147483647 }, "epoch": { "type": "integer", "minimum": 0 } }
+    },
+    "annotation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["timestamp", "targetID", "visibility", "point", "uncertaintyPixels", "provenance"],
+      "properties": {
+        "timestamp": { "$ref": "#/$defs/time" }, "targetID": { "type": "string", "minLength": 1 },
+        "visibility": { "enum": ["visible", "occluded", "outside-frame", "uncertain"] },
+        "point": { "oneOf": [{ "$ref": "#/$defs/point" }, { "type": "null" }] },
+        "uncertaintyPixels": { "type": ["number", "null"], "minimum": 0 },
+        "provenance": { "enum": ["manual-reference", "synthetic-reference"] }
+      },
+      "allOf": [{ "if": { "properties": { "visibility": { "const": "visible" } } }, "then": { "properties": { "point": { "$ref": "#/$defs/point" }, "uncertaintyPixels": { "type": "number", "minimum": 0 } } } }]
+    },
+    "clip": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "sourceGroup", "sha256", "localPath", "split", "synthetic", "permissionEvidence", "lift", "targetID", "uprightWidth", "uprightHeight", "annotations"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 }, "sourceGroup": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "localPath": { "type": "string", "minLength": 1 },
+        "split": { "enum": ["training", "development", "holdout"] }, "synthetic": { "type": "boolean" },
+        "permissionEvidence": { "type": "string", "minLength": 1 }, "lift": { "enum": ["squat", "bench", "deadlift", "synthetic"] },
+        "targetID": { "type": "string", "minLength": 1 },
+        "uprightWidth": { "type": "integer", "minimum": 1, "maximum": 8192 }, "uprightHeight": { "type": "integer", "minimum": 1, "maximum": 8192 },
+        "annotations": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/annotation" } }
+      }
+    }
+  }
+}

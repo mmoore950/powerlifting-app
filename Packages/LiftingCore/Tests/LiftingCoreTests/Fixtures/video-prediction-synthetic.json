@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "coordinateSpace": "upright-normalized-top-left",
+  "modelID": "synthetic-test-only",
+  "runs": [
+    {
+      "clipID": "synthetic-only",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mode": "automatic",
+      "synthetic": true,
+      "uprightWidth": 100,
+      "uprightHeight": 100,
+      "elapsedSeconds": 1,
+      "samples": [
+        { "timestamp": { "value": "0", "timescale": 10, "epoch": 0 }, "point": { "x": 0.5, "y": 0.5 }, "confidence": 0.8, "kind": "automatic", "targetID": "track-1" },
+        { "timestamp": { "value": "1", "timescale": 10, "epoch": 0 }, "point": null, "confidence": 0, "kind": "lost", "targetID": null }
+      ]
+    }
+  ]
+}
