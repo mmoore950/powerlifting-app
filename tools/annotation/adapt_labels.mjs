@@ -111,6 +111,14 @@ export async function verifyAssets(ledger,bundleDir,assetRoot) {
   // Reuse the scorer's streaming byte/count, before/after stat and 60s cancellation policy.
   try { await verifyMedia({schemaVersion:1,coordinateSpace:'upright-normalized-top-left',clips:[{...ledger.clip,annotations:[]}]},assetRoot,{fileLimit,totalLimit:fileLimit}); }
   catch(error) { throw Error(`Media hash changed or file policy failed: ${error.message}`); }
+  return verifyRasterAssets(ledger,bundleDir);
+}
+
+// The aggregate verifies each explicit physical recording separately and reuses
+// these unchanged per-window raster/prediction checks. This does not skip media
+// verification in verifyAssets or relax its existing caller contract.
+export async function verifyRasterAssets(ledger,bundleDir) {
+  validateLedger(ledger);
   let total=0;
   for(const f of ledger.frames) {
     const filename=await within(bundleDir,'frames/'+f.filename),size=(await stat(filename)).size;

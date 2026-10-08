@@ -4,6 +4,13 @@ Entry point: `offline-via.html`. See [the user guide](../../docs/local-annotatio
 
 `evaluate_native_bundle.mjs` is the strict native evaluation path: actual assets/prediction checks, strict label adaptation, same-buffer scoring and fresh output with byte-binding receipt. There is no manifest/purpose bypass; generic `score-video-traces.mjs` diagnostic uses remain unchanged. `native_evaluation.test.mjs` exercises orchestration with explicitly synthetic contracts. Actual generated Apple-to-wrapper execution is still pending; [the bounded extraction recipe](../../docs/generated-native-extraction.md) records the route and limits.
 
+`aggregate_native_windows.mjs` accepts an explicit selected rep/window plan,
+freshly verifies per-window native evaluation receipts/assets/labels and publishes
+derived registry/coverage/conflict reports. It preserves all conflicts and original
+identities, separates model/mode comparisons and never pools scalar scores or
+claims continuity/accuracy. See [the full-rep registry guide](../../docs/full-rep-window-registry.md)
+for exact plan/group/overlap inputs, correction links, storage bounds and gates.
+
 `vendor/via-2.0.12.html` is pinned unmodified upstream provenance, not the entry point; it includes the original analytics script. Do not open it with private data. `build_offline.py` reproduces the derivative from those exact reviewed bytes and local panel/shared JSON source. `provenance.json` records upstream and derivative digests and changes. Both HTML files retain the full upstream BSD 2-Clause notice. No upstream download occurs during build.
 
 Public/synthetic frame bundles, media, saved drafts and export reports are ignored artifacts, not repository assets. `prepare_frames.py` accesses only an explicitly named media file under an explicitly named root and already provisioned tooling. `adapt_labels.mjs` checks the ledger and actual media/images using the existing reference validator. PyAV bundles produce development drafts and cannot request native scoring. The native branch additionally checks the adjacent prediction JSON's hash, schema, clip/mode/model/dimensions and exact timestamp components before native reference export. Shared `native_contract.mjs` is embedded by the builder into the browser panel. Apple execution and final browser acceptance remain pending independently.
