@@ -40,6 +40,26 @@ final class OPLProfileTests: XCTestCase {
     private func client(_ transport: ProfileTransport) throws -> OPLRepository {
         try OPLRepository(baseURL: XCTUnwrap(URL(string: "https://fixture.invalid")), transport: transport, cache: ProfileCache())
     }
+    func testAdditionalDraftApplyAndClearPreserveContextAndLiteralSourceValues() {
+        let applied = scope.merging(["metric": "bench", "tested": "yes", "federation": "OLD", "from": "2020-01-01"]) { _, new in new }
+        var draft = OPLProfileScope.additionalDraft(from: applied)
+        XCTAssertEqual(draft["federation"], "OLD"); XCTAssertNil(draft["sex"])
+        draft["federation"] = "  FIX  "; draft["from"] = " "; draft["to"] = "2025-01-01"
+        draft["bodyweightMin"] = " 60.50 "; draft["ignored"] = "unsupported"
+        XCTAssertEqual(applied["federation"], "OLD"); XCTAssertEqual(applied["from"], "2020-01-01")
+        let next = OPLProfileScope.applyingAdditional(draft, to: applied)
+        XCTAssertEqual(next["federation"], "FIX"); XCTAssertNil(next["from"]); XCTAssertEqual(next["to"], "2025-01-01")
+        XCTAssertEqual(next["bodyweightMin"], "60.50"); XCTAssertNil(next["ignored"])
+        for key in ["sex", "equipment", "event", "tested", "metric"] { XCTAssertEqual(next[key], applied[key]) }
+        for label in ["+", "120+", "-74"] {
+            XCTAssertEqual(OPLProfileScope.applyingAdditional(["weightClass": label], to: next)["weightClass"], label)
+        }
+        let cleared = OPLProfileScope.applyingAdditional([:], to: next)
+        XCTAssertTrue(OPLProfileScope.additionalDraft(from: cleared).isEmpty)
+        for key in ["sex", "equipment", "event", "tested", "metric"] { XCTAssertEqual(cleared[key], applied[key]) }
+        // No approximate client validation: rejected service text is transmitted verbatim on Apply.
+        XCTAssertEqual(OPLProfileScope.applyingAdditional(["from": "invalid date"], to: next)["from"], "invalid date")
+    }
     func testBoundedDTOAndRankingContextPreserveIdentityAndIndependentMetricSemantics() throws {
         let value = try JSONDecoder().decode(OPLProfileSummary.self, from: bytes(object()))
         XCTAssertEqual(value.bests.first?.value, 500); XCTAssertEqual(value.scope, scope)

@@ -1,5 +1,38 @@
 # Worker status
 
+## Shared profile filter editor and interaction source audit — October 8, 2026, 07:57 ET
+
+- Recovered and completed the approved shared six-field editor in profile and
+  rankings. Optional draft text stays separate until Apply; inherited draft,
+  whitespace trimming, empty removal, literal source classes, category/tested/
+  ranking metric context, and synchronized profile Clear are preserved. Clear is
+  also available for newly typed unapplied drafts. Service validation remains
+  authoritative; no second Swift date/range interpretation was added.
+- Keyboard focus has Done/Return/interactive scroll dismissal without application.
+  Apply/Clear/Retry dismiss it; explicit retry labels/hints distinguish profile,
+  all-category meet history, and rankings. Applied profile labels remain visible;
+  changed profile scope hides old bests. Ranking rows/drill-down/load-more now
+  require matching captured applied filters and dataset version, hiding old rows
+  immediately on a changed Apply. Actual SwiftUI cancellation/render order is
+  pending; this is a source guard, not an interaction pass.
+- ACTUAL Windows affected Node suite: 7 passed, zero failed/skipped, 0.803s.
+  Added validation parity assertions for invalid calendar date, reversed dates,
+  reversed/nonpositive bodyweight, invalid class, and literal +/120+/-74 on both
+  summary and rankings. First run found an incorrect expected error string in
+  the new assertion; corrected it to the service's existing Invalid calendar
+  date and reran successfully. No service implementation change.
+- Added one meaningful core draft/apply/clear regression method; Swift uncompiled/
+  unrun on Windows. Source inventory is now 46 core + 21 app-host + 1 UI = 68,
+  expected only. UTF-8/source whitespace checks passed. Native interaction gate
+  added to native-validation.md. No push/new CI; run19 remains early macOS test
+  compilation failure at earlier 67-method source, no simulator prepared, not a
+  runtime experiment result. Reviewed ce56 fixture rename still needs compilation.
+- Source checkpoint/audit complete ahead of revised 8–12 minute estimate; no hard
+  source deadline. Leader review is next, response ETA unknown until a response.
+  Native feature readiness remains undated until reviewed Apple execution and
+  keyboard/VoiceOver/Dynamic Type/recovery interaction evidence; future build 8,
+  test 10, job 30 minute limits remain. Production/private/release gates separate.
+
 ## Run19 compiler failure and narrow source correction — October 8, 2026, 07:47 ET
 
 - Exactb06eb77 run37771657886/job113292468047 completed failure during macOS core

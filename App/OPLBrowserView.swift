@@ -152,9 +152,13 @@ private struct OPLHistoryView: View {
     @StateObject private var page = OPLPageStore<OPLResult>()
     @StateObject private var summary = OPLPageStore<OPLProfileSummary>()
     @State private var scope: [String: String]
+    @State private var additionalDraft: [String: String]
+    @FocusState private var focusedAdditional: String?
     init(model: OPLBrowserModel, lifter: OPLLifter, filters: [String: String] = [:]) {
         self.model = model; self.lifter = lifter
-        _scope = State(initialValue: OPLProfileScope.parameters(from: filters))
+        let initial = OPLProfileScope.parameters(from: filters)
+        _scope = State(initialValue: initial)
+        _additionalDraft = State(initialValue: OPLProfileScope.additionalDraft(from: initial))
     }
     private struct ProfileTaskID: Equatable {
         let revision: Int
@@ -181,13 +185,31 @@ private struct OPLHistoryView: View {
                     Text("Yes").tag("yes")
                     Text("Not designated").tag("not-designated")
                 }
+                DisclosureGroup("More profile filters") {
+                    OPLAdditionalFilterEditor(draft: $additionalDraft, focus: $focusedAdditional)
+                    if additionalDraft != OPLProfileScope.additionalDraft(from: scope) {
+                        Text("Edits have not been applied. Best values below still use the applied filters.").font(.caption)
+                    }
+                    Button("Apply profile filters") {
+                        focusedAdditional = nil
+                        scope = OPLProfileScope.applyingAdditional(additionalDraft, to: scope)
+                        additionalDraft = OPLProfileScope.additionalDraft(from: scope)
+                    }.accessibilityHint("Applies the six optional filters to profile best performances. Meet history stays independent.")
+                }
+                Text("Applied profile filters").font(.caption.bold()).accessibilityAddTraits(.isHeader)
                 ForEach(scope.keys.sorted(), id: \.self) { key in Text(scopeLabel(key)).font(.caption).lineLimit(nil).fixedSize(horizontal: false, vertical: true) }
-                if scope.keys.contains(where: { !["sex", "equipment", "event", "tested"].contains($0) }) {
-                    Button("Clear additional ranking filters") { scope = scope.filter { ["sex", "equipment", "event", "tested"].contains($0.key) } }
-                        .accessibilityHint("Keeps the selected sex category, equipment, event and tested designation.")
+                if !additionalDraft.isEmpty || !OPLProfileScope.additionalDraft(from: scope).isEmpty {
+                    Button("Clear additional filters") {
+                        focusedAdditional = nil
+                        scope = OPLProfileScope.applyingAdditional([:], to: scope)
+                        additionalDraft = [:]
+                    }
+                        .accessibilityHint("Discards optional draft edits and clears applied optional filters. Keeps the selected sex category, equipment, event and tested designation.")
                 }
                 Text("Best eligible values across this entire dataset for these filters; not ratified records. Lift bests can come from different meets and do not add up to a competition total.").font(.caption)
-                OPLPageStatus(page: summary, retryLabel: "Retry profile")
+                OPLPageStatus(page: summary, retryLabel: "Retry profile",
+                    retryHint: "Retries the applied profile filters. Draft edits require Apply profile filters.",
+                    beforeRetry: { focusedAdditional = nil })
                 if consistentVersion, let profile = summary.items.first, profile.scope == scope {
                     ForEach(["total", "squat", "bench", "deadlift", "dots"], id: \.self) { metric in
                         if let best = profile.bests.first(where: { $0.metric == metric }), let value = best.value {
@@ -210,7 +232,8 @@ private struct OPLHistoryView: View {
             }
             Section("Meet history · all categories") {
                 Text("All rows for this exact source name, independent of profile filters. Divisions can produce repeated meet rows.").font(.caption)
-                OPLPageStatus(page: page, retryLabel: "Retry meet history")
+                OPLPageStatus(page: page, retryLabel: "Retry meet history",
+                    retryHint: "Retries all-category meet history for this source name.", beforeRetry: { focusedAdditional = nil })
                 if page.loadedVersion == model.version {
                     ForEach(page.items) { result in OPLResultRow(result: result) }
                     if !page.loading, page.error == nil, model.version != nil, page.items.isEmpty {
@@ -219,7 +242,17 @@ private struct OPLHistoryView: View {
                     OPLMoreButton(page: page)
                 }
             }
-        }.navigationTitle(lifter.name).navigationBarTitleDisplayMode(.inline)
+        }.scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    if focusedAdditional != nil {
+                        Spacer()
+                        Button("Done") { focusedAdditional = nil }
+                            .accessibilityHint("Dismisses the keyboard without applying draft filters.")
+                    }
+                }
+            }
+            .navigationTitle(lifter.name).navigationBarTitleDisplayMode(.inline)
             .task(id: model.revision) {
                 await page.reset(client: model.repository, version: model.version,
                     query: OPLQuery(path: "lifters/\(lifter.lifterID)/results"), adoptDataset: model.adoptRecovery)
@@ -258,12 +291,9 @@ private struct OPLRankingsView: View {
     @State private var event = "SBD"
     @State private var tested = ""
     @State private var metric = "total"
-    @State private var federation = ""
-    @State private var from = ""
-    @State private var to = ""
-    @State private var minimum = ""
-    @State private var maximum = ""
-    @State private var weightClass = ""
+    @State private var additionalDraft: [String: String] = [:]
+    @FocusState private var focusedAdditional: String?
+    @State private var displayedFilters: [String: String]?
     @State private var applied = ["sex": "M", "equipment": "Raw", "event": "SBD", "metric": "total"]
     @State private var filterRevision = 0
     var body: some View {
@@ -278,50 +308,90 @@ private struct OPLRankingsView: View {
                     Text("Not designated").tag("not-designated")
                 }
                 option("Performance metric", value: $metric, choices: ["total", "squat", "bench", "deadlift", "dots"])
-                TextField("Exact federation (optional)", text: $federation).accessibilityLabel("Exact federation, optional")
-                TextField("From YYYY-MM-DD (optional)", text: $from).accessibilityLabel("Start date, year month day, optional")
-                TextField("Through YYYY-MM-DD (optional)", text: $to).accessibilityLabel("End date, year month day, optional")
-                TextField("Bodyweight min kg (optional)", text: $minimum).keyboardType(.decimalPad).accessibilityLabel("Minimum bodyweight in kilograms, optional")
-                TextField("Bodyweight max kg (optional)", text: $maximum).keyboardType(.decimalPad).accessibilityLabel("Maximum bodyweight in kilograms, optional")
-                TextField("Exact raw class label, e.g. 74 or 120+", text: $weightClass).accessibilityLabel("Exact source weight class label")
-                Text("Class labels are literal upstream values, not a universal federation class. Best performances exclude DQ/DD/NS and unsanctioned results; guest performances remain eligible.").font(.caption)
+                OPLAdditionalFilterEditor(draft: $additionalDraft, focus: $focusedAdditional)
                 Button("Apply filters") { apply() }
+                    .accessibilityHint("Applies the selected categories, metric and optional draft filters to rankings.")
             }.textInputAutocapitalization(.never).autocorrectionDisabled()
             Section {
                 Text("Best \(applied["metric"] ?? "total") per exact source name; not federation-ratified records.").font(.caption)
                 Text("\(applied["sex"] ?? "") · \(applied["equipment"] ?? "") · \(applied["event"] ?? "")").font(.caption.bold())
             }
-            OPLPageStatus(page: page)
-            ForEach(Array(page.items.enumerated()), id: \.element.id) { index, result in
-                NavigationLink {
-                    OPLHistoryView(model: model, lifter: OPLLifter(name: result.name, lifterID: result.lifterID), filters: applied)
-                } label: {
-                    VStack(alignment: .leading) {
-                        Text("\(index + 1). \(result.name)").font(.headline)
-                        OPLResultRow(result: result)
+            OPLPageStatus(page: page, retryLabel: "Retry rankings",
+                retryHint: "Retries the applied ranking filters. Draft edits require Apply filters.", beforeRetry: { focusedAdditional = nil })
+            if displayedFilters == applied, page.loadedVersion == model.version {
+                ForEach(Array(page.items.enumerated()), id: \.element.id) { index, result in
+                    NavigationLink {
+                        OPLHistoryView(model: model, lifter: OPLLifter(name: result.name, lifterID: result.lifterID), filters: applied)
+                    } label: {
+                        VStack(alignment: .leading) {
+                            Text("\(index + 1). \(result.name)").font(.headline)
+                            OPLResultRow(result: result)
+                        }
+                    }
+                }
+                if !page.loading, page.error == nil, model.version != nil, page.items.isEmpty {
+                    Text("No eligible performances for these filters.")
+                }
+                OPLMoreButton(page: page)
+            } else { Text("Rankings are updating. Previous rows are hidden.").font(.caption) }
+        }.scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    if focusedAdditional != nil {
+                        Spacer()
+                        Button("Done") { focusedAdditional = nil }
+                            .accessibilityHint("Dismisses the keyboard without applying draft filters.")
                     }
                 }
             }
-            if !page.loading, page.error == nil, model.version != nil, page.items.isEmpty {
-                Text("No eligible performances for these filters.")
-            }
-            OPLMoreButton(page: page)
-        }.task(id: "\(model.revision):\(filterRevision)") {
-            await page.reset(client: model.repository, version: model.version,
-                query: OPLQuery(path: "rankings", parameters: applied), adoptDataset: model.adoptRecovery)
-        }.refreshable { await model.refresh() }
+            .task(id: "\(model.revision):\(filterRevision)") {
+                let requestedFilters = applied
+                await page.reset(client: model.repository, version: model.version,
+                    query: OPLQuery(path: "rankings", parameters: requestedFilters), adoptDataset: model.adoptRecovery)
+                if !Task.isCancelled { displayedFilters = requestedFilters }
+            }.refreshable { await model.refresh() }
     }
     private func option(_ title: String, value: Binding<String>, choices: [String]) -> some View {
         Picker(title, selection: value) { ForEach(choices, id: \.self) { Text($0).tag($0) } }
     }
     private func apply() {
-        var values = ["sex": sex, "equipment": equipment, "event": event, "metric": metric]
-        for (key, text) in ["tested": tested, "federation": federation, "from": from, "to": to,
-            "bodyweightMin": minimum, "bodyweightMax": maximum, "weightClass": weightClass] {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { values[key] = trimmed }
+        focusedAdditional = nil
+        var values = OPLProfileScope.applyingAdditional(additionalDraft,
+            to: ["sex": sex, "equipment": equipment, "event": event, "metric": metric])
+        if !tested.isEmpty { values["tested"] = tested }
+        applied = values
+        additionalDraft = OPLProfileScope.additionalDraft(from: values)
+        filterRevision += 1
+    }
+}
+
+private struct OPLAdditionalFilterEditor: View {
+    @Binding var draft: [String: String]
+    let focus: FocusState<String?>.Binding
+    private struct Field {
+        let key: String, title: String, label: String
+        var decimal = false
+    }
+    private static let fields = [
+        Field(key: "federation", title: "Exact federation (optional)", label: "Exact federation, optional"),
+        Field(key: "from", title: "From YYYY-MM-DD (optional)", label: "Start date, year month day, optional"),
+        Field(key: "to", title: "Through YYYY-MM-DD (optional)", label: "End date, year month day, optional"),
+        Field(key: "bodyweightMin", title: "Bodyweight min kg (optional)", label: "Minimum bodyweight in kilograms, optional", decimal: true),
+        Field(key: "bodyweightMax", title: "Bodyweight max kg (optional)", label: "Maximum bodyweight in kilograms, optional", decimal: true),
+        Field(key: "weightClass", title: "Exact source class, e.g. 74 or 120+", label: "Exact source weight class label, optional")
+    ]
+    var body: some View {
+        ForEach(Self.fields, id: \.key) { field in
+            TextField(field.title, text: Binding(get: { draft[field.key] ?? "" }, set: { draft[field.key] = $0 }))
+                .focused(focus, equals: field.key)
+                .submitLabel(.done).onSubmit { focus.wrappedValue = nil }
+                .keyboardType(field.decimal ? .decimalPad : .default)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .accessibilityLabel(field.label)
+                .accessibilityHint("Draft filter. Use Apply to update results.")
         }
-        applied = values; filterRevision += 1
+        Text("Class labels are literal upstream values, not universal federation classes. Dates are inclusive. Bodyweight filters use recorded kilograms. Best performances exclude DQ/DD/NS and unsanctioned results; eligible guest performances remain included.")
+            .font(.caption).lineLimit(nil).fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -348,11 +418,14 @@ private struct OPLResultRow: View {
 private struct OPLPageStatus<Item: Codable & Identifiable & Sendable>: View {
     @ObservedObject var page: OPLPageStore<Item>
     var retryLabel = "Try again"
+    var retryHint = "Retries this request."
+    var beforeRetry: () -> Void = {}
     var body: some View {
         if page.loading { ProgressView("Loading results") }
         if let error = page.error {
             InputErrorView(message: error)
-            Button(retryLabel) { Task { await page.retry() } }.disabled(page.loading)
+            Button(retryLabel) { beforeRetry(); Task { await page.retry() } }
+                .disabled(page.loading).accessibilityHint(retryHint)
         }
         if page.offline { Text("Live refresh unavailable — previously saved pages").foregroundStyle(.orange) }
         if let notice = page.notice { Text(notice).font(.caption).foregroundStyle(.orange) }

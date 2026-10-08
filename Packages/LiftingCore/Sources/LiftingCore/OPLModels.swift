@@ -133,6 +133,19 @@ public struct OPLProfileSummary: Codable, Identifiable, Sendable {
 
 /// Preserve ranking drill-down filters while dropping its selected metric.
 public enum OPLProfileScope {
+    public static let additionalKeys = ["federation", "from", "to", "bodyweightMin", "bodyweightMax", "weightClass"]
+    public static func additionalDraft(from applied: [String: String]) -> [String: String] {
+        applied.filter { additionalKeys.contains($0.key) }
+    }
+    /// Draft text never mutates applied filters. Semantic validation remains at the service.
+    public static func applyingAdditional(_ draft: [String: String], to applied: [String: String]) -> [String: String] {
+        var next = applied.filter { ["sex", "equipment", "event", "tested", "metric"].contains($0.key) }
+        for key in additionalKeys {
+            let text = (draft[key] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty { next[key] = text }
+        }
+        return next
+    }
     public static func parameters(from filters: [String: String]) -> [String: String] {
         let keys = Set(["sex", "equipment", "event", "tested", "federation", "from", "to", "bodyweightMin", "bodyweightMax", "weightClass"])
         var scope = filters.filter { keys.contains($0.key) }

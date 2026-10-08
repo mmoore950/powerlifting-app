@@ -99,7 +99,7 @@ second command. `test-phases.json` records the aggregate and partial/unrun phase
 An outer observation failure stops only the owned supervisor wrapper and reports
 unverified child cleanup, never successful cleanup of escaped sessions/services.
 
-The current named XCTest source inventory is45core+21app-host+1UI=67 iOS methods;
+The current named XCTest source inventory is46core+21app-host+1UI=68 iOS methods;
 the additional generated two-window method is source only and absent fromrun17.
 the HTTP test is entirely macOS-only, so iOS has no expected HTTP skip. Its separate
 actual HTTP gate and macOS opt-in skip remain. `check-test-inventory.py` requires
@@ -215,3 +215,33 @@ The data and video gates in `research-gates.md` are independent. Passing plate U
 ## Product accessibility source follow-up
 
 The bounded view source pass is documented in `accessibility-source-pass.md`. Purpose/unit/set labels, explicit error cues and Developer settings separation have not been exercised with VoiceOver, Dynamic Type or rendered UI. Include reverse-stepper adjustment actions, text-field value announcements, noninteractive per-side grouping, long names/filters, missing/failed result rows and no-connection/developer-disclosure/retry paths in the first device/Simulator pass. These source changes are not accessibility acceptance.
+
+## Profile and ranking additional-filter editor interaction gate
+
+The shared six-field editor and pure Apply helper are source only. The new core
+draft/apply/clear method brings the current expected inventory to 68; run19 tested
+the earlier 67-method source and stopped at macOS compilation before execution.
+The fixture `sourceName` rename and this editor still require Apple compilation.
+
+- Open a profile from rankings with federation/date/bodyweight/class filters.
+  Verify the draft inherits those literal values, category/tested context is kept,
+  and the applied scope stays visible. Change draft text without Apply: existing
+  bests and network query scope must remain unchanged.
+- Apply whitespace/empty optional edits and literal `+`, `120+`, or negative class
+  labels. Check that old profile bests and ranking rows are hidden immediately for
+  a changed applied scope, and ranking drill-down uses only applied filters.
+- Clear with both inherited optional filters and newly typed unapplied text. All
+  optional drafts and applied fields must clear together; core/tested context
+  remains. Later Apply must not restore discarded text.
+- Enter malformed or reversed dates/bodyweight ranges or invalid class text.
+  Existing service validation must surface an error; profile meet history remains
+  all-category, and retry uses applied filters rather than unapplied edits.
+- On both screens, focus every field including decimal-pad fields. Keyboard Done,
+  Return, and interactive scrolling dismiss without Apply. Apply/Clear/Retry dismiss
+  the keyboard. Review focus, expandable controls, labels, hints, and multiline
+  text with VoiceOver and large Dynamic Type.
+- Exercise rapid Apply, refresh, expiration recovery, offline cache, and failed
+  new scopes. Actual SwiftUI task cancellation/rendering ordering is still pending;
+  Windows source inspection and existing store test source do not establish it.
+
+No native/keyboard/accessibility pass or release readiness is claimed here.

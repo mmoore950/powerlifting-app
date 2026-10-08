@@ -52,6 +52,21 @@ test('full-snapshot five winners preserve categories, exclusions, nulls, suffixe
   assert.equal((await query(root,'summary',{...scope,id:id('absent')})).results.length,0);
   await assert.rejects(query(root,'summary',{...params,cursor:'ignored'}),/UNSUPPORTED_FILTER/);
   await assert.rejects(query(root,'summary',{...params,event:'invalid'}),/VALID_EVENT/);
+  // The two routes share authoritative validation; client drafts do not reinterpret it.
+  for(const [extra,error] of [
+    [{from:'2025-02-30'},/Invalid calendar date/],
+    [{from:'2025-03-01',to:'2025-02-01'},/INVALID_DATE_RANGE/],
+    [{bodyweightMin:'80',bodyweightMax:'70'},/INVALID_BODYWEIGHT_RANGE/],
+    [{bodyweightMin:'0'},/INVALID_BODYWEIGHT/],
+    [{weightClass:'74 kilograms'},/INVALID_WEIGHT_CLASS/]
+  ]) {
+    await assert.rejects(query(root,'summary',{...params,...extra}),error);
+    await assert.rejects(query(root,'rankings',{...scope,tested:'yes',metric:'total',...extra}),error);
+  }
+  for(const weightClass of ['+','120+','-74']) {
+    assert.deepEqual((await query(root,'summary',{...params,weightClass})).results[0].bests,[]);
+    assert.deepEqual((await query(root,'rankings',{...scope,weightClass})).results,[]);
+  }
   const server=serve({root,port:0});await once(server,'listening');
   try {
     const url=`http://127.0.0.1:${server.address().port}/lifters/${id(name)}/summary?`+new URLSearchParams({...scope,tested:'yes',version:response.version});
