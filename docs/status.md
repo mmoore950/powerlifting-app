@@ -1,5 +1,11 @@
 # Worker status
 
+## Picker dismissal/retry correction — October 8, 2026, 04:59 ET
+
+- Planner source review of46a50ef identified stale `.sheet onDismiss` reading the current presentation: delegate completion could release the lease before old sheet dismissal and allow a retry that the old callback then consumes. Removed that callback. Extracted `AnnotationExportPickerState` holds the matching presentation through delegate result/closing; only the exact representable dismantle token completes it. Model/store lease and disabled retry remain active until this teardown, then the asynchronous matching release finishes. Older dismantle/delegate callbacks cannot act on a newer presentation.
+- Added a fifth XCTest SOURCE that asserts retry refusal during closing, then delivers the old dismissal AFTER a new retry starts and verifies it leaves the new active identity untouched. Also verifies duplicate delegate/teardown refusal and implicit-dismiss cancellation. Not executed on Windows. Native teardown/provider lifetime still needs Apple verification; no SDK/build pass claim. Full source inventory is now42ordinarycore+19app-host+1UI (62 expected passing plus opt-inHTTPskip).
+- ACTUAL four corrected/new Swift files parse with zero grammar errors; whitespace passes. No unrelated source or store architecture expansion, push/CI or native run. Named correctness repair checkpoint about4minutes after sizing, earlier than8–15min provisional estimate; noharddeadline. High repair is ready for review/stepdown. Resume UI timing/fresh-simulator proposal, already has actual ninth/run14 comparison; next scoped handoff5–10min, noharddeadline. Native/private/research readiness unchanged.
+
 ## Portable annotation export source checkpoint — October 8, 2026, 04:54 ET
 
 - Implemented explicit chosen-lift/development <=1s control, whole-movie size/destination disclosure, shared one-package store, disk-backed <=600MiB package and UIKit Files directory-copy prototype. Original ledger/prediction/bundle/PNG/movie bytes and recorded basename are preserved; source group is stable recording SHA, without inferred subject independence/holdout/consent. Maintained algorithm + actual app-build identifier; no fabricated Git revision. Ordinary detector/default30s analysis unchanged.

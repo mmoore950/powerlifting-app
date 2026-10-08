@@ -4,11 +4,6 @@ import PhotosUI
 import UniformTypeIdentifiers
 import LiftingCore
 
-private struct AnnotationExportPresentation: Identifiable {
-    let id = UUID()
-    let package: PreparedAnnotationExport
-}
-
 @MainActor
 struct VideoAnalysisView: View {
     @StateObject private var model = VideoModel()
@@ -19,7 +14,7 @@ struct VideoAnalysisView: View {
     @State private var analysisMode = BarAnalysisMode.automatic
     @State private var annotationLift = ""
     @State private var exportPickerPackage: AnnotationExportPresentation?
-    @State private var activeExportPicker: AnnotationExportPresentation?
+    @State private var exportPickerState = AnnotationExportPickerState()
     @State private var exportPresentationTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
@@ -95,8 +90,7 @@ struct VideoAnalysisView: View {
                                         let lease = try await model.beginSavingAnnotationExport()
                                         acquired = lease
                                         try Task.checkCancellation()
-                                        let presentation = AnnotationExportPresentation(package: lease)
-                                        activeExportPicker = presentation; exportPickerPackage = presentation
+                                        exportPickerPackage = try exportPickerState.begin(lease)
                                     } catch {
                                         if let acquired { await model.finishSavingAnnotationExport(acquired.id, saved: false) }
                                     }
@@ -119,20 +113,14 @@ struct VideoAnalysisView: View {
                     catch { pickerError = error.localizedDescription }
                 }
                 .task { await model.recoverAnnotationExport() }
-                .sheet(item: $exportPickerPackage, onDismiss: {
-                    if let presentation = activeExportPicker {
-                        activeExportPicker = nil
-                        Task { await model.finishSavingAnnotationExport(presentation.package.id, saved: false) }
-                    }
-                }) { presentation in
-                    AnnotationExportPicker(package: presentation.package) { saved, message in
-                        // Delegate, dismantle and sheet dismissal may all report
-                        // completion. A fresh presentation identity prevents a
-                        // delayed callback from releasing a later retry's lease.
-                        guard activeExportPicker?.id == presentation.id else { return }
-                        activeExportPicker = nil; exportPickerPackage = nil
-                        Task { await model.finishSavingAnnotationExport(presentation.package.id, saved: saved, message: message) }
-                    }
+                .sheet(item: $exportPickerPackage) { presentation in
+                    AnnotationExportPicker(package: presentation.package, requestDismissal: { saved, message in
+                        guard exportPickerState.requestDismissal(presentation.id, saved: saved, message: message) else { return }
+                        exportPickerPackage = nil
+                    }, dismantled: {
+                        guard let completion = exportPickerState.dismantle(presentation.id) else { return }
+                        Task { await model.finishSavingAnnotationExport(completion.packageID, saved: completion.saved, message: completion.message) }
+                    })
                 }
                 .task(id: picked) {
                     guard let picked else { return }

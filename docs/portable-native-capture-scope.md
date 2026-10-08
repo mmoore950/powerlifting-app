@@ -16,9 +16,11 @@ deleting the managed source. Prior analysis is retained on preparation failure.
 The default shared store reserves one prepared package. It uses Application
 Support/AnnotationExports, excluded from backup, with owned UUID work/completion
 directories. Completed packages recover after restart and remain until explicit
-discard; picker leases prevent discard. Delegate/dismantle/dismissal callbacks are
-guarded by a fresh presentation identity so an older callback cannot release a
-later retry. Inactive work cleanup is retried before preparation/discard; user
+discard; picker leases prevent discard. Delegate results request closing but
+retain the lease until the matching representable is dismantled; retry stays
+disabled through closing. Teardown callbacks carry a fresh presentation identity,
+and the sheet has no unbound onDismiss lease-release callback. An older teardown
+cannot release a later retry. Inactive work cleanup is retried before preparation/discard; user
 destinations and managed movies are never store cleanup targets.
 
 Physical limit600MiB includes the supplementary receipt. Movie reads/copies use
@@ -37,15 +39,17 @@ lift; explicit local export action does not infer broader research consent. Mode
 identity uses the maintained algorithm identifier and actual app build value,
 or honestly unspecified, without an invented Git revision.
 
-Four new app-host XCTest methods cover byte preservation/recovery/one-slot and
+Five new app-host XCTest methods cover byte preservation/recovery/one-slot and
 lease retention, mutation/extra/symlink/revocation/collision rejection, storage and
 copy cancellation, joined model cancellation/removal/replacement and completed
-package survival during a lease. They are source only. The test inventory is now
-42 ordinary core +18 app-host +1 UI expected passing methods, with a separate
-opt-in HTTP skip in the full scheme; none of the four additions has run on Apple.
+package survival during a lease, plus an extracted picker-lifecycle test delivering
+an old dismissal after a new retry begins. They are source only. The test inventory
+is now42 ordinary core+19 app-host+1UI expected passing methods, with a separate
+opt-in HTTP skip in the full scheme; none of the five additions has run on Apple.
 
-Actual Windows verification: seven changed Swift files parsed with no grammar
-errors using ignored tree-sitter0.26.0/tree-sitter-swift0.7.3 tooling; whitespace
+Actual Windows verification at initial checkpoint: seven changed Swift files parsed with no grammar
+errors using ignored tree-sitter0.26.0/tree-sitter-swift0.7.3 tooling; the four files
+in the later picker correction also parse without grammar errors. Whitespace
 check passed. The five native-wrapper Node methods pass, including a new portable
 layout test that removes the original fixture root, verifies unchanged copied
 inputs and rejects changed media despite a supplementary receipt. Its bytes/PNG
