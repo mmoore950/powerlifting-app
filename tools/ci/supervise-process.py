@@ -5,6 +5,7 @@ OS services and descendants that leave this session are outside this ownership
 boundary. Windows supports only the direct child; it cannot validate macOS cleanup.
 """
 import argparse
+import errno
 import json
 import math
 import os
@@ -15,6 +16,24 @@ import time
 import traceback
 
 KILL_SIGNAL = getattr(signal, "SIGKILL", 9)
+
+
+def group_present(pgid, evidence):
+    """EPERM is uncertain presence, never proof that an owned group is gone."""
+    evidence["operation"] = "observe-owned-group"
+    try:
+        os.killpg(pgid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError as error:
+        if error.errno != errno.EPERM:
+            raise
+        evidence["groupProbePermissionErrors"] = evidence.get("groupProbePermissionErrors", 0) + 1
+        evidence["lastGroupProbeError"] = f"{type(error).__name__}: {error}"
+        # The existing grace/KILL deadlines still bound observation. Persistent
+        # uncertainty must fail cleanup; actual signaling errors are not ignored.
+        return True
 
 
 def positive(value):
@@ -68,12 +87,7 @@ def main():
         child.poll()
         if not posix:
             return child.returncode is None
-        try:
-            evidence["operation"] = "observe-owned-group"
-            os.killpg(child.pid, 0)
-            return True
-        except ProcessLookupError:
-            return False
+        return group_present(child.pid, evidence)
 
     def send(signum):
         try:
@@ -101,21 +115,27 @@ def main():
         return True
 
     def cleanup(first_signal):
-        if owned_alive():
-            send(first_signal)
-            if not wait_owned(args.term_grace):
-                send(KILL_SIGNAL)
-                wait_owned(args.kill_wait)
-        # Always call wait on the direct child; grandchildren are not waitable.
         try:
-            evidence["operation"] = "wait-direct-child"
-            child.wait(timeout=max(0.01, args.kill_wait if child.poll() is None else 0.01))
-        except subprocess.TimeoutExpired:
-            evidence["directChildWaitCompleted"] = False
-        else:
-            evidence["directChildWaitCompleted"] = True
+            if owned_alive():
+                send(first_signal)
+                if not wait_owned(args.term_grace):
+                    send(KILL_SIGNAL)
+                    wait_owned(args.kill_wait)
+        except Exception:
+            evidence["cleanupFailureOperation"] = evidence.get("operation")
+            raise
+        finally:
+            # Observation/signaling errors must not skip the direct-child wait.
+            # Grandchildren are not waitable by this process.
+            try:
+                evidence["operation"] = "wait-direct-child"
+                child.wait(timeout=max(0.01, args.kill_wait if child.poll() is None else 0.01))
+            except subprocess.TimeoutExpired:
+                evidence["directChildWaitCompleted"] = False
+            else:
+                evidence["directChildWaitCompleted"] = True
+            evidence["childReturnCode"] = child.returncode
         evidence["ownedGroupAbsent"] = not owned_alive() if posix else None
-        evidence["childReturnCode"] = child.returncode
         return evidence["directChildWaitCompleted"] and (not posix or evidence["ownedGroupAbsent"])
 
     handlers = {s: signal.signal(s, cancelled) for s in (signal.SIGINT, signal.SIGTERM)}
@@ -153,7 +173,8 @@ def main():
             exit_code = 128 + requested_signal
     except Exception as error:
         evidence.update(reason="supervisor-error", error=f"{type(error).__name__}: {error}",
-                        errorOperation=evidence.get("operation"), errorTraceback=traceback.format_exc())
+                        errorOperation=evidence.get("cleanupFailureOperation", evidence.get("operation")),
+                        errorTraceback=traceback.format_exc())
         if child is not None:
             try:
                 evidence["cleanupComplete"] = cleanup(signal.SIGTERM)

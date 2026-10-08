@@ -1,5 +1,7 @@
 """Real short processes, including owned grandchildren and signals on POSIX."""
 import json
+import errno
+import importlib.util
 import os
 from pathlib import Path
 import signal
@@ -8,6 +10,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 SUPERVISOR = Path(__file__).with_name("supervise-process.py")
 
@@ -68,6 +71,27 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(receipt["childReturnCode"], 7)
 
     def test_timeout(self):
+        # Deterministic uncertainty checks supplement the real subprocess check;
+        # these injected errno cases do not claim macOS runtime coverage.
+        spec = importlib.util.spec_from_file_location("supervisor_probe", SUPERVISOR)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        evidence = {}
+        with patch.object(module.os, "killpg", create=True,
+                          side_effect=[PermissionError(errno.EPERM, "probe denied"),
+                                       ProcessLookupError(errno.ESRCH, "group gone")]):
+            self.assertTrue(module.group_present(123, evidence))
+            self.assertFalse(module.group_present(123, evidence))
+        self.assertEqual(evidence["groupProbePermissionErrors"], 1)
+        with patch.object(module.os, "killpg", create=True,
+                          side_effect=PermissionError(errno.EPERM, "still uncertain")):
+            self.assertTrue(module.group_present(123, evidence))
+            self.assertTrue(module.group_present(123, evidence))
+        self.assertEqual(evidence["groupProbePermissionErrors"], 3)
+        with patch.object(module.os, "killpg", create=True,
+                          side_effect=PermissionError(errno.EACCES, "different error")):
+            with self.assertRaises(PermissionError):
+                module.group_present(123, evidence)
         result, receipt = self.run_child("import time; time.sleep(30)", timeout=0.4)
         self.assertEqual(result.returncode, 124)
         self.assertEqual(receipt["reason"], "timeout")

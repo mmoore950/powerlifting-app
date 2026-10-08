@@ -30,6 +30,12 @@ after a normal child exit. Escaped sessions and simulator OS services are outsid
 this boundary; no process-name matching or global kill is used. Group existence
 can include unreaped zombies, so incomplete cleanup fails conservatively with125.
 Timeout is124, cancellation is128+signal and ordinary child failures are retained.
+An EPERM result from the zero-signal group probe is recorded as present/uncertain
+and observed under the existing deadline; it never proves absence. Persistent
+uncertainty, an actual signal permission error, or a different probe error cannot
+pass cleanup. The direct-child wait runs in finally even if group cleanup raises.
+Apple's [killpg documentation](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/killpg.2.html)
+distinguishes EPERM from ESRCH. The runner's transient EPERM kernel cause is unknown.
 
 Top-level `build.process.json`/`test.process.json` receipts preserve the command,
 PID/group, reason, signals, child exit and observed cleanup outcome in the plain
