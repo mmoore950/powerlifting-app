@@ -2,6 +2,21 @@
 
 October8,2026, approximately02:33ET. Source review after implementation4a700f5, using the actual exporter/model/shared contract/adapter/scorer and guide. No native/browser execution or new feature scope.
 
+### Later evidence update (October8, after the thirteenth CI run)
+
+The numbered review below is historical. Ninth exact4a700f5 actually passed57
+simulator methods. Eleventh exactcd3a34c passed42core/14app-host, all four capture
+methods including stronger embedded-PNG/RGB and explicit XCTestCase attachment
+association; UI startup exceeded the test step and attachment export was skipped.
+Actual native-to-wrapper evidence is still absent. The strict wrapper implemented
+at6db4b41 now enforces supported ledger/label/media/prediction association; the
+generic scorer remains a diagnostic path and accuracyGatePassed staysfalse.
+Corrected clear/save/reload/retry/zoom/public navigation has bounded browser
+evidence atf42b467; independent request audit/direct-file/private access remain
+pending. Source retention and a product export control are proposed in
+`portable-native-capture-scope.md`, not implemented. Twelfth14d50b1 failed POSIX
+supervisor setup before Xcode; diagnostics correctiona3d40a9 awaits native evidence.
+
 ## Field and instruction reconciliation
 
 | Step | Actual contract | Guide disposition |
