@@ -2,7 +2,7 @@ import XCTest
 @testable import LiftingCore
 
 final class VideoPredictionExportTests: XCTestCase {
-    private let hash = String(repeating: "a", count: 64)
+    private let fixtureSHA256 = String(repeating: "a", count: 64)
     private func trace() throws -> VideoTrace {
         try VideoTrace(start: 0, end: 1, samples: [
             VideoTraceSample(seconds: 0, point: VideoPoint(x: 0.5, y: 0.5), confidence: 0.8, kind: .automatic, targetID: "track-1"),
@@ -10,7 +10,7 @@ final class VideoPredictionExportTests: XCTestCase {
     }
     private func run(trace: VideoTrace? = nil, times: [VideoPresentationTime]? = nil, mode: VideoPredictionMode = .automatic,
                      hash: String? = nil, width: Int = 100, elapsed: Double = 1) throws -> VideoPredictionRun {
-        try VideoPredictionRun(clipID: "synthetic-only", sha256: hash ?? self.hash, mode: mode, synthetic: true,
+        try VideoPredictionRun(clipID: "synthetic-only", sha256: hash ?? fixtureSHA256, mode: mode, synthetic: true,
             uprightWidth: width, uprightHeight: 100, elapsedSeconds: elapsed, trace: trace ?? self.trace(),
             timestamps: times ?? [VideoPresentationTime(value: 0, timescale: 10, epoch: 0), VideoPresentationTime(value: 1, timescale: 10, epoch: 0)])
     }

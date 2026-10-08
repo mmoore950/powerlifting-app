@@ -1,6 +1,14 @@
 # Worker status
 
-Updated 2026-10-07, 11:06 PM America/New_York. Local source snapshot reviewed for the human-approved private mmoore950/powerlifting-app upload with strictly zero spending. GitHub browser sign-in and paid-overage blocking verification remain leader prerequisites, and no CI is authorized yet. Native/accuracy/continuing-freshness gates remain pending.
+Updated 2026-10-07, 11:14 PM America/New_York. The leader pushed the approved source snapshot to private mmoore950/powerlifting-app and dispatched the first native CI run. That run failed during core XCTest compilation; simulator validation did not run. Native/accuracy/continuing-freshness gates remain pending. Earlier prerequisite notes below are historical and superseded by this checkpoint.
+
+## First native CI diagnostic / bounded compiler repair
+
+- Leader verified GitHub sign-in, Actions allowance (0/2000 included minutes and 0/0.5 GB storage used), and an Actions $0 budget with Stop usage enabled. No payment or billing changes. Source commit `54ba3832425951bba547ef90bd80e279a20f9119` was pushed to private origin/main.
+- Actual run: https://github.com/mmoore950/powerlifting-app/actions/runs/37721274310, job `113129236539`. Leader retrieved logs: setup passed with Apple Swift 6.1.2; core test compilation failed at VideoPredictionExportTests.swift line 5 because the private String property `hash` conflicts with inherited NSObject.hash (Int). No successful native test count or simulator build/test result is established.
+- Renamed only the stored test fixture identifier to `fixtureSHA256` and its use. Reviewed all package and app test sources for the same `hash` member collision; remaining uses are function parameters, local variables, or CryptoKit/error symbols. Test semantics and fixture bytes are unchanged.
+- Local verification: source/diff inspection and Git whitespace checks only; Windows has no Swift/Xcode toolchain. The next Apple run must confirm compilation and execute tests. Worker commits locally; leader owns push and dispatch.
+- Repair estimate at dispatch was 5–10 minutes, with no hard repair deadline. Next native result ETA depends on leader push/dispatch and runner queue; re-estimate after the next runner starts or diagnostics arrive. CI has a 30-minute job ceiling excluding queue time. CI completion is separate from device, real-video accuracy, hosting, and scheduled-freshness readiness.
 
 ## Approved private repository / local commit preparation
 
