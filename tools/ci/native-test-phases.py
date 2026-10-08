@@ -30,27 +30,33 @@ def phases(shared_id, ui_id, derived, output):
                            "-resultBundlePath", str(output / "test-unit.xcresult"), "-skip-testing:PowerliftingAppUITests"])]
 
 
-def execute(plan, output, cancellation, *, budget=560, clock=time.monotonic, runner=run_supervised, validator=None):
+def execute(plan, output, cancellation, *, budget=560, clock=time.monotonic, runner=run_supervised, validator=None,
+            reserves=None, receipt_name="test-phases.json", validation_key="inventory"):
     if not math.isfinite(budget) or budget <= CLEANUP_RESERVE:
         raise ValueError("Invalid shared test budget")
+    reserves = reserves or {}
+    if any(not math.isfinite(value) or value < 0 for value in reserves.values()):
+        raise ValueError("Invalid following-phase reservation")
     started = clock()
     deadline = started + budget
     evidence = {"schemaVersion": 1, "budgetSeconds": budget, "cleanupReserveSeconds": CLEANUP_RESERVE,
                 "phases": [], "state": "running", "aggregateExitCode": 125}
-    destination = output / "test-phases.json"
+    destination = output / receipt_name
     save_json(destination, evidence)
     code = 0
     try:
         for name, command in plan:
             remaining = deadline - clock()
-            if code != 0 or cancellation.signum is not None or remaining <= CLEANUP_RESERVE:
+            reserve = CLEANUP_RESERVE + reserves.get(name, 0)
+            if code != 0 or cancellation.signum is not None or remaining <= reserve:
                 reason = "previous-failure" if code else "cancelled" if cancellation.signum else "shared-deadline-exhausted"
                 code = code or (128 + cancellation.signum if cancellation.signum else 124)
                 evidence["phases"].append({"name": name, "launched": False, "reason": reason})
                 continue
-            timeout = remaining - CLEANUP_RESERVE
+            timeout = remaining - reserve
             print(f"Starting {name}; shared remaining {remaining:.3f}s, child budget {timeout:.3f}s", flush=True)
-            entry = {"name": name, "command": command, "sharedRemainingSeconds": remaining, "childTimeoutSeconds": timeout}
+            entry = {"name": name, "command": command, "sharedRemainingSeconds": remaining, "childTimeoutSeconds": timeout,
+                     "followingPhaseReserveSeconds": reserves.get(name, 0)}
             evidence["phases"].append(entry)
             save_json(destination, evidence)
             entry.update(runner(command, timeout, output / name, cancellation))
@@ -62,13 +68,15 @@ def execute(plan, output, cancellation, *, budget=560, clock=time.monotonic, run
                 code = code or 128 + cancellation.signum
             save_json(destination, evidence)
         if code == 0 and validator is not None:
-            evidence["inventory"] = validator()
+            evidence[validation_key] = validator()
             if clock() > deadline:
                 code = 124
     except Exception as error:
         evidence["error"] = f"{type(error).__name__}: {error}"
         code = 125
     finally:
+        if code == 0 and cancellation.signum is not None:
+            code = 128 + cancellation.signum
         evidence.update(state="finished", aggregateExitCode=code, elapsedSeconds=clock() - started,
                         cancellationSignal=cancellation.signum)
         save_json(destination, evidence)

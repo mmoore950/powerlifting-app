@@ -67,11 +67,16 @@ Keep the existing selected simulator for non-UI tests. Do not erase/delete exist
 devices, kill global services or choose an unobserved hard-coded device/runtime.
 Capture inventory, state, exact creation/boot commands and times. Actual `xcrun
 simctl help` on the Apple host establishes installed command syntax; Windows does
-not validate it. Create/boot under the existing prepare2min limit; setup/build/job
+not validate it. Create/boot request under the existing prepare2min limit; setup/build/job
 limits remain5/8/30min. An overrun fails with diagnostics, without retry/extension.
 
 Build all targets once using the existing build-for-testing destination/derived
-data and440s supervisor. In the single existing10min test step, run two sequential
+data. Following actual run15 cold-boot timeout, approved repair shares ONE440s
+deadline across build-for-testing first, required UI bootstatus second, and fresh
+matching Booted inventory proof third. Compilation overlaps natural simulator
+startup; future work/cleanup reservations and failure/unrun receipts retain the
+existing build8min limit. No ready flag from boot request alone, no retry/extension.
+In the single existing10min test step, run two sequential
 test-without-building invocations with the same built scheme/derived data:
 
 1. UI first, on the owned freshly booted simulator, selecting the complete

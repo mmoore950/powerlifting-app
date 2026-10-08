@@ -13,7 +13,8 @@ exports BOTH results: `test-ui.xcresult` to `screenshots/ui` for the exact five-
 UI checker, and `test-unit.xcresult` to `screenshots/unit` for its generated native
 capture manifest and bounded extraction recipe. No manifest merging or image
 substitution. Both raw result bundles survive test failure; export remains skipped
-then. The split workflow has not run on Apple. Older run37723566137 at2611743
+then. Apple run15 reached preparation and failed cold-boot readiness; its split
+app build/tests/exports were skipped. Older run37723566137 at2611743
 actually passed/exported its five UI images from a single result; that historical
 evidence does not validate the new split route. Test10/job30 and retention3days remain.
 
@@ -29,7 +30,8 @@ documentation](https://developer.apple.com/library/archive/technotes/tn2339/_ind
 The unchanged outer limits are build 8 minutes, test 10 minutes and job 30 minutes.
 
 `tools/ci/supervise-process.py` launches xcodebuild without a shell in a new POSIX
-session/process group. Build uses440s; the split test phase shares560s and gives
+session/process group. Build shares440s across compilation and mandatory UI
+readiness; the split test phase shares560s and gives
 each invocation its remaining budget minus cleanup reserve. The outer8/10min
 limits retain margin for receipt writing and bounded observation. Timeout
 or SIGINT/SIGTERM signals only that owned group, allows 5 seconds of grace, then
@@ -46,7 +48,8 @@ pass cleanup. The direct-child wait runs in finally even if group cleanup raises
 Apple's [killpg documentation](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/killpg.2.html)
 distinguishes EPERM from ESRCH. The runner's transient EPERM kernel cause is unknown.
 
-Top-level `build.process.json`, `test-ui.process.json` and `test-unit.process.json`
+Top-level `build-compile.process.json`, `ui-build-bootstatus.process.json`,
+`ui-build-ready.process.json`, `test-ui.process.json` and `test-unit.process.json`
 receipts preserve the command,
 PID/group, reason, signals, child exit and observed cleanup outcome in the plain
 diagnostic artifact. A hard external kill can leave a `running` receipt; that is
@@ -78,15 +81,28 @@ require review rather than a frozen count. This log gate is not a Swift parser.
 
 `owned_ui_simulator.py` records preexisting IDs, run/attempt/name/runtime/device
 type and validates the returned new UUID against fresh inventory before boot.
-Create/boot shares90s plus bounded command cleanup within prepare2min; installed
+Creation/boot request shares90s including bounded command cleanup within prepare2min;
+it records `bootRequested:true`, `bootVerified:false`. Installed
 simctl help/commands/logs are retained. The always cleanup step has100s internal
 budget within its2min step. It validates record/run/current device identity,
 refuses malformed/empty/preexisting IDs, shuts down/deletes only its owned UUID
 and requires observed absence. Cancellation, missing identity or failed commands
 keep cleanup false. Job30 can interrupt cleanup; runner teardown remains external.
-Fourteen added orchestration tests include shared budget/cancellation/failure,
+`native-build-phase.py` first compiles on the existing destination while the fresh
+UI simulator boots independently. It then requires successful bootstatus and a
+fresh matching available Booted inventory entry before marking ready. ONE440s
+deadline covers all three commands: compilation retains70s for following work and
+cleanup, bootstatus retains30s for final inventory/cleanup, and each command also
+reserves20s for its supervisor cleanup/observer. Compile failure, cancellation or
+budget exhaustion leaves explicit unrun readiness in `build-phases.json` and
+prevents the test phase. No separate boot440s allowance or retry. Simulator OS
+startup services are outside the owned command group.
+
+Nineteen orchestration tests include shared budget/cancellation/failure,
 inventory omission/duplicate/skip guards, injected simulator identities and a real
-POSIX signal-propagation method. Windows13pass/1POSIXskip is not simctl/macOS proof.
+POSIX signal-propagation method. The original14 all passed on macOS in run15;
+the five added build-budget/readiness methods are source-only until a reviewed run.
+Windows18pass/1POSIXskip is not new simctl/macOS proof.
 Top-level test receipts/logs are retained before temporary fixture cleanup.
 
 1. Run `swift test --package-path Packages/LiftingCore`: fixture cases and 120 deterministic small-inventory comparisons against exhaustive full count-vector enumeration, plus invalid inputs/decoding/selection/cap cases.

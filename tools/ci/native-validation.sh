@@ -90,20 +90,9 @@ PY
     python3 tools/ci/owned_ui_simulator.py create --output "$output"
     ;;
   build)
-    : "${SIMULATOR_ID:?Simulator selection missing}"
-    # Internal deadline leaves 40s before the unchanged 8/10min step bounds.
-    # TERM grace + KILL/group observation + direct-child wait are bounded to 15s.
-    # A single destination; no signing credentials, accounts or device provisioning.
-    python3 tools/ci/supervise-process.py --timeout 440 \
-      --term-grace 5 --kill-wait 5 --receipt "$output/$phase.process.json" -- \
-      xcodebuild -project PowerliftingApp.xcodeproj -scheme PowerliftingApp \
-      -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
-      -destination-timeout 60 \
-      -derivedDataPath "$RUNNER_TEMP/powerlifting-derived-data" \
-      -resultBundlePath "$output/$phase.xcresult" \
-      -parallel-testing-enabled NO \
-      -maximum-concurrent-test-simulator-destinations 1 \
-      CODE_SIGNING_ALLOWED=NO build-for-testing
+    python3 tools/ci/native-build-phase.py --output "$output" \
+      --derived "${RUNNER_TEMP:?}/powerlifting-derived-data" \
+      --selected "$output/selected-simulator.json" --owned-ui "$output/owned-ui-simulator.json"
     ;;
   test)
     python3 tools/ci/native-test-phases.py --output "$output" \

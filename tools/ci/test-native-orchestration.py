@@ -20,6 +20,9 @@ spec.loader.exec_module(phases_module)
 inventory_spec = importlib.util.spec_from_file_location("test_inventory", Path(__file__).with_name("check-test-inventory.py"))
 inventory_module = importlib.util.module_from_spec(inventory_spec)
 inventory_spec.loader.exec_module(inventory_module)
+build_spec = importlib.util.spec_from_file_location("build_phase", Path(__file__).with_name("native-build-phase.py"))
+build_module = importlib.util.module_from_spec(build_spec)
+build_spec.loader.exec_module(build_module)
 SHARED = "11111111-1111-4111-8111-111111111111"
 FRESH = "22222222-2222-4222-8222-222222222222"
 RUNTIME = "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
@@ -67,6 +70,13 @@ class NativeOrchestrationTests(unittest.TestCase):
         self.assertIn(str(self.root / "test-unit.xcresult"), calls[1][0])
         self.assertEqual(self.evidence()["elapsedSeconds"], 70)
         self.assertEqual((self.root / "test-unit.exit-code").read_text(), "0\n")
+
+        def cancelled_validator():
+            self.cancel.request(signal.SIGTERM)
+            return {"verified": True}
+        self.assertEqual(phases_module.execute(self.plan, self.root, self.cancel, clock=self.clock, runner=runner,
+                                              validator=cancelled_validator), 143)
+        self.assertEqual(self.evidence()["aggregateExitCode"], 143)
         with self.assertRaises(ValueError): phases_module.phases(SHARED, SHARED, self.root, self.root)
 
     def test_budget_exhaustion_does_not_launch_second_child(self):
@@ -215,7 +225,8 @@ class SimulatorOwnershipTests(unittest.TestCase):
     def test_fresh_creation_boot_and_owned_only_cleanup(self):
         self.assertEqual(self.create(), 0)
         record = verified_record(self.root / "owned-ui-simulator.json", self.selected)
-        self.assertTrue(record["bootVerified"]); self.assertNotEqual(record["udid"], SHARED)
+        self.assertTrue(record["bootRequested"]); self.assertFalse(record["bootVerified"]); self.assertNotEqual(record["udid"], SHARED)
+        self.assertFalse(any(c[2] == "bootstatus" for c in self.calls if c[0] == "xcrun"))
         self.assertEqual(self.cleanup(), 0)
         self.assertIn(SHARED, self.devices); self.assertNotIn(FRESH, self.devices)
         receipt = json.loads((self.root / "owned-ui-cleanup.json").read_text())
@@ -255,6 +266,71 @@ class SimulatorOwnershipTests(unittest.TestCase):
         cancelled = Cancellation(); cancelled.request(signal.SIGINT)
         self.assertEqual(operation("create", self.root, self.selected, self.inventory(), cancelled, runner=self.runner), 125)
         self.assertEqual(self.calls, []); self.assertEqual(set(self.devices), {SHARED})
+
+    def build(self, runner, clock, cancellation=None):
+        return build_module.execute_build(self.selected, self.root / "owned-ui-simulator.json", self.root / "derived",
+                                          self.root, cancellation or Cancellation(), clock=clock, runner=runner)
+
+    def test_build_then_readiness_shares_440_seconds_and_preserves_future_cleanup(self):
+        self.assertEqual(self.create(), 0); self.calls.clear(); clock = Clock(); budgets = []
+        def runner(command, timeout, prefix, cancellation):
+            budgets.append((prefix.name, timeout)); clock.now += {"build-compile": 100, "ui-build-bootstatus": 200, "ui-build-ready": 5}[prefix.name]
+            if command[0] == "xcodebuild":
+                self.calls.append(command); return {"exitCode": 0, "launched": True}
+            return self.runner(command, timeout, prefix, cancellation)
+        self.assertEqual(self.build(runner, clock), 0)
+        self.assertEqual(budgets, [("build-compile", 350), ("ui-build-bootstatus", 290), ("ui-build-ready", 120)])
+        self.assertEqual(self.calls[0][0], "xcodebuild"); self.assertEqual(self.calls[1][2], "bootstatus")
+        self.assertIn(f"platform=iOS Simulator,id={SHARED}", self.calls[0]); self.assertEqual(self.calls[1][3], FRESH)
+        self.assertTrue(verified_record(self.root / "owned-ui-simulator.json", self.selected)["bootVerified"])
+        receipt = json.loads((self.root / "build-phases.json").read_text())
+        self.assertEqual(receipt["budgetSeconds"], 440); self.assertEqual(receipt["elapsedSeconds"], 305)
+        self.assertTrue(receipt["uiReadiness"]["bootedObserved"])
+
+    def test_build_failure_exhaustion_and_cancellation_keep_readiness_unrun(self):
+        self.assertEqual(self.create(), 0)
+        for condition, expected in [("failure", 7), ("exhausted", 124), ("cancelled", 143)]:
+            with self.subTest(condition=condition):
+                calls = []; clock = Clock(); cancellation = Cancellation()
+                def runner(command, timeout, prefix, cancel):
+                    calls.append(command)
+                    if condition == "exhausted": clock.now += 391
+                    if condition == "cancelled": cancel.request(signal.SIGTERM)
+                    return {"exitCode": 7 if condition == "failure" else 0, "launched": True}
+                self.assertEqual(self.build(runner, clock, cancellation), expected); self.assertEqual(len(calls), 1)
+                receipt = json.loads((self.root / "build-phases.json").read_text())
+                self.assertTrue(all(p["launched"] is False for p in receipt["phases"][1:]))
+                self.assertFalse(verified_record(self.root / "owned-ui-simulator.json", self.selected)["bootVerified"])
+
+    def test_failed_bootstatus_or_nonbooted_inventory_never_marks_ready(self):
+        self.assertEqual(self.create(), 0)
+        for condition, expected in [("timeout", 124), ("nonbooted", 125)]:
+            with self.subTest(condition=condition):
+                self.calls.clear(); clock = Clock()
+                def runner(command, timeout, prefix, cancellation):
+                    clock.now += 1
+                    if command[0] == "xcodebuild": return {"exitCode": 0, "launched": True}
+                    if command[2] == "bootstatus" and condition == "timeout": return {"exitCode": 124, "launched": True}
+                    if prefix.name == "ui-build-ready": self.devices[FRESH]["state"] = "Shutdown"
+                    return self.runner(command, timeout, prefix, cancellation)
+                self.assertEqual(self.build(runner, clock), expected)
+                self.assertFalse(verified_record(self.root / "owned-ui-simulator.json", self.selected)["bootVerified"])
+
+    def test_owned_record_changed_during_build_refuses_ready(self):
+        self.assertEqual(self.create(), 0); owned = self.root / "owned-ui-simulator.json"
+        def runner(command, timeout, prefix, cancellation):
+            if command[0] == "xcodebuild":
+                record = json.loads(owned.read_text()); record["name"] = "Another owner"; save_json(owned, record)
+                return {"exitCode": 0, "launched": True}
+            return self.runner(command, timeout, prefix, cancellation)
+        self.assertEqual(self.build(runner, Clock()), 125)
+        self.assertFalse(json.loads(owned.read_text())["bootVerified"])
+
+    def test_build_requires_verified_boot_request_before_any_child(self):
+        self.assertEqual(self.create(), 0); owned = self.root / "owned-ui-simulator.json"
+        record = json.loads(owned.read_text()); record["bootRequested"] = False; save_json(owned, record); self.calls.clear()
+        with self.assertRaisesRegex(ValueError, "completed boot request"): self.build(self.runner, Clock())
+        self.assertEqual(self.calls, [])
 
 
 if __name__ == "__main__":

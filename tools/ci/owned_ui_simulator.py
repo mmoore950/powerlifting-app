@@ -115,7 +115,7 @@ def operation(mode, output, selected, inventory, cancellation, *, clock=time.mon
                       "selectedUDID": selected_id, "preexistingUDIDs": sorted(existing),
                       "name": f"LiftToolkit-UI-{run}-{attempt}-{uuid.uuid4().hex[:8]}",
                       "runtime": runtime, "deviceType": device_type, "commands": commands,
-                      "createdValidated": False, "bootVerified": False, "state": "create-intent"}
+                      "createdValidated": False, "bootRequested": False, "bootVerified": False, "state": "create-intent"}
             save_json(owned_file, record)
             command("ui-create-help", ["xcrun", "simctl", "help", "create"], maximum=5)
             command("ui-bootstatus-help", ["xcrun", "simctl", "help", "bootstatus"], maximum=5)
@@ -133,12 +133,9 @@ def operation(mode, output, selected, inventory, cancellation, *, clock=time.mon
             record.update(createdValidated=True, state="booting")
             save_json(owned_file, record)
             command("ui-boot", ["xcrun", "simctl", "boot", record["udid"]], maximum=10)
-            command("ui-bootstatus", ["xcrun", "simctl", "bootstatus", record["udid"], "-b"], maximum=40)
-            ready = identities(log_json(command("ui-ready", ["xcrun", "simctl", "list", "--json"], maximum=10)))
-            ready_runtime, ready_device = ready[record["udid"]]
-            if not same_device(record, ready_runtime, ready_device) or ready_device.get("state") != "Booted":
-                raise ValueError("Created simulator has no verified Booted state")
-            record.update(bootVerified=True, state="ready")
+            # Cold boot proceeds while the following build compiles. Build's one
+            # shared deadline still requires bootstatus AND fresh Booted evidence.
+            record.update(bootRequested=True, state="boot-requested")
             save_json(owned_file, record)
             print(json.dumps({k: record[k] for k in ("udid", "name", "runtime", "bootVerified")}))
         else:
