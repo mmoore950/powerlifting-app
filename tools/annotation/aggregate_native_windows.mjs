@@ -8,7 +8,7 @@ import {scoreVideoTraces,verifyMedia} from '../score-video-traces.mjs';
 
 const MiB=1024*1024;
 const limits={windows:64,rawFrames:1024,jsonBytes:32*MiB,mediaBytes:4*1024**3,outputBytes:8*MiB,
-  perFileMs:60_000,cooperativeMs:300_000,repSeconds:30};
+  perFileMs:60_000,cooperativeMs:300_000,repSeconds:30,partitionAssignments:4096};
 const require=(ok,message)=>{if(!ok)throw Error(message);};
 const object=x=>x&&typeof x==='object'&&!Array.isArray(x);
 const keys=(x,required,optional=[],label='object')=>require(object(x)&&required.every(k=>Object.hasOwn(x,k))&&Object.keys(x).every(k=>[...required,...optional].includes(k)),`Unexpected ${label} fields`);
@@ -44,6 +44,28 @@ const local=x=>typeof x==='string'&&x.length>0&&!x.includes('\0')&&!/^(?:[a-z][a
 async function absent(filename) {
   try {await lstat(filename);throw Error('Aggregation destination already exists');}
   catch(e){if(e.code!=='ENOENT')throw e;}
+}
+
+const partitionKinds=['recording-sha256','source-group','recording-group','session-group','subject-group'];
+const groupKinds={recordingGroupID:'recording-group',sessionGroupID:'session-group',subjectGroupID:'subject-group'};
+function partitionMap(evidence) {
+  keys(evidence,['schemaVersion','assignments'],[],'cumulative partition constraints');
+  require(evidence.schemaVersion===1&&Array.isArray(evidence.assignments)&&evidence.assignments.length<=limits.partitionAssignments,'Invalid/bounded cumulative partition history');
+  const result=new Map();
+  for(const row of evidence.assignments) {
+    keys(row,['kind','id','split'],[],'partition assignment');
+    require(partitionKinds.includes(row.kind)&&typeof row.id==='string'&&row.id.length>0&&!row.id.includes('\0')&&['training','development','holdout'].includes(row.split),'Invalid partition assignment');
+    if(row.kind==='recording-sha256')require(/^[a-f0-9]{64}$/.test(row.id),'Invalid partition recording hash');
+    else if(row.kind!=='source-group')require(identifier(row.id),'Invalid anonymous partition group');
+    const key=canonical([row.kind,row.id]);require(!result.has(key),'Duplicate cumulative partition assignment');result.set(key,row);
+  }
+  return result;
+}
+function assignPartition(map,kind,id,split,{mustExist=false}={}) {
+  const key=canonical([kind,id]),prior=map.get(key);
+  require(!mustExist||prior,'Previous registry is missing its own cumulative partition assignment');
+  require(!prior||prior.split===split,'Cumulative recording/group leaked across partitions');
+  if(!prior){require(map.size<limits.partitionAssignments,'Cumulative partition assignment bound4096 exceeded');map.set(key,{kind,id,split});}
 }
 
 function validatePlan(plan) {
@@ -109,7 +131,7 @@ export async function aggregateNativeWindows({planFile,output,existingFile,previ
   const existingBytes=existingFile?await read(existingFile,32*MiB):null;
   const existing=existingBytes?parseStrictJSON(existingBytes.toString('utf8')):{schemaVersion:1,coordinateSpace:'upright-normalized-top-left',clips:[]};
   validateVideoManifest(existing);
-  let previous=null;
+  let previous=null;const constraints=new Map();
   if(previousReceiptFile) {
     const bytes=await read(previousReceiptFile,8*MiB),prior=parseStrictJSON(bytes.toString('utf8'));
     require(prior.schemaVersion===1&&prior.kind==='native-window-aggregation'&&prior.complete===true&&prior.accuracyGatePassed===false,'Previous aggregation receipt is incomplete/foreign');
@@ -124,6 +146,16 @@ export async function aggregateNativeWindows({planFile,output,existingFile,previ
     const registry=artifacts['registry.json'];
     require(registry.schemaVersion===1&&registry.kind==='native-window-registry'&&registry.recordingSHA256===prior.recordingSHA256&&registry.repID===prior.repID&&object(registry.groups)&&['training','development','holdout'].includes(registry.split),'Previous registry identity changed');
     require(artifacts['aggregation.json'].accuracyGatePassed===false&&artifacts['aggregation.json'].scalarMetrics===null,'Previous aggregation contains unsupported pooled metrics');
+    require(registry.partitionConstraints!==undefined,'Previous registry lacks transitive partition evidence; chaining this prior format is refused');
+    const inherited=partitionMap(registry.partitionConstraints);
+    assignPartition(inherited,'recording-sha256',registry.recordingSHA256,registry.split,{mustExist:true});
+    for(const [key,kind] of Object.entries(groupKinds))if(registry.groups[key]!==null)assignPartition(inherited,kind,registry.groups[key],registry.split,{mustExist:true});
+    require(Array.isArray(registry.windows)&&registry.windows.length>0&&registry.windows.length<=limits.windows,'Invalid previous window count');
+    for(const w of registry.windows) {
+      require(object(w.clip)&&w.clip.sha256===registry.recordingSHA256&&w.clip.split===registry.split&&typeof w.clip.sourceGroup==='string','Previous window partition identity changed');
+      assignPartition(inherited,'source-group',w.clip.sourceGroup,w.clip.split,{mustExist:true});
+    }
+    for(const [key,row] of inherited)constraints.set(key,row);
     previous={receiptSHA256:digest(bytes),receiptPath:await realpath(previousReceiptFile),registry};
   }
   for(const input of plan.windows) {
@@ -195,12 +227,18 @@ export async function aggregateNativeWindows({planFile,output,existingFile,previ
   for(const w of unique){const prior=combined.get(w.clip.id);require(!prior||equal(prior,w.reference),'Existing registry clip ID changed');combined.set(w.clip.id,w.reference);}
   require(combined.size<=100,'Existing plus selected registry exceeds authoritative100-clip validator bound; reduce explicitly selected inputs');
   validateVideoManifest({...existing,clips:[...combined.values()]});
+  for(const clip of combined.values()) {
+    assignPartition(constraints,'recording-sha256',clip.sha256,clip.split);
+    assignPartition(constraints,'source-group',clip.sourceGroup,clip.split);
+  }
+  for(const [key,kind] of Object.entries(groupKinds))if(groups[key]!==null)assignPartition(constraints,kind,groups[key],first.clip.split);
+  const partitionConstraints={schemaVersion:1,assignments:[...constraints.values()].toSorted((a,b)=>canonical([a.kind,a.id]).localeCompare(canonical([b.kind,b.id])))};
   const aggregation=deriveCoverage(unique,windows,rep,expected);
   const registry={schemaVersion:1,kind:'native-window-registry',createdAt:new Date().toISOString(),repID:plan.repID,recordingSHA256:plan.recordingSHA256,
     interval:plan.interval,groups,independence:'unknown; a recording hash or supplied group ID does not establish independent subjects/sessions',
     split:first.clip.split,synthetic:first.clip.synthetic,lift:first.clip.lift,targetID:first.clip.targetID,
     planSHA256:digest(planBytes),existingReferenceRegistrySHA256:existingBytes?digest(existingBytes):null,
-    previousAggregation:previous?{receiptSHA256:previous.receiptSHA256,receiptPath:previous.receiptPath}:null,windows};
+    previousAggregation:previous?{receiptSHA256:previous.receiptSHA256,receiptPath:previous.receiptPath}:null,partitionConstraints,windows};
   const files=new Map([['registry.json',json(registry)],['aggregation.json',json(aggregation)]]);
   const receipt={schemaVersion:1,kind:'native-window-aggregation',complete:true,accuracyGatePassed:false,createdAt:registry.createdAt,
     recordingSHA256:plan.recordingSHA256,repID:plan.repID,files:Object.fromEntries([...files].map(([name,bytes])=>[name,{sha256:digest(bytes),bytes:bytes.length}])),

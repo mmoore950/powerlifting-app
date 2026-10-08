@@ -88,10 +88,26 @@ IDs must have matching reference contents. Existing plus64 new windows can excee
 For a correction, choose a new output directory and supply
 `--previous-receipt C:\selected\reports\rep-001\aggregation-receipt.json`.
 The previous registry/coverage bytes must match their receipt. The new registry
-links its SHA/path and preserves prior same-recording group relationships and
-recording/group partition constraints. Supply any earlier reference registry
-again with `--existing` when its broader partition context is still required.
-The previous report is never overwritten or deleted.
+links its SHA/path and preserves prior same-recording group relationships.
+`partitionConstraints` carries a cumulative typed map from recording SHA,
+source group, anonymous recording group, session group and subject group to the
+assigned split. A new recording B cannot forget recording/group A before a later
+C correction; conflicting assignments refuse publication. Constraints from an
+explicit existing reference registry also survive through this cumulative map.
+Only the explicitly selected previous receipt and its bound registry/coverage
+files are opened; ancestor paths are not followed. The previous report is never
+overwritten or deleted.
+
+The map has schemaVersion1 and at most4096 unique `{kind,id,split}` assignments.
+Types are `recording-sha256`, `source-group`, `recording-group`, `session-group`
+and `subject-group`; splits remain training/development/holdout. The previous
+registry must carry its own recording/group/source assignments with the same
+split, without duplicates. Earlier format registries lacking this transitive
+evidence are conservatively refused for chaining, even when their receipt hashes
+match. They are not automatically scanned or migrated; select the authoritative
+original inputs explicitly for a fresh derivation. Hashes bind bytes rather than
+authenticate group origin or independence. The shared32MiB selected-input and
+8MiB derived-output limits also apply to this history.
 
 ## Outputs and interpretation
 
@@ -169,7 +185,9 @@ relaxed to fabricate that test path.
 uses generated shape/header contract bytes and synthetic labels only. It checks
 nonzero/disjoint ranges, overlap deduplication, tuple/raster/decoder/reference
 conflicts, model/mode separation, original-ID collisions, changed receipts/assets,
-publication-time mutations/cancellation, prior group constraints, global reference
+publication-time mutations/cancellation, three-generation typed partition
+constraints, legacy/missing/duplicate/oversized history refusal, retained existing
+reference constraints without ancestor traversal, global reference
 split leakage/100clip bound, canonical source reuse, collision preservation,
 strict input bounds and the actual local CLI. It does not decode a real video or
 execute Swift/Files export/Apple capture. Real references remain zero and accuracy

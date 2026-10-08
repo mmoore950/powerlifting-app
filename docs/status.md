@@ -1,5 +1,36 @@
 # Worker status
 
+## Run16 failure reconciled and transitive partition fix — October 8, 2026, 06:23 ET
+
+- Actual final run37759725854/job113252936665 at f000132 failed build125 and
+  cleanup125. Nine POSIX supervisor checks7.047s/nineteen orchestration1.641s
+  passed; macOS core42pass1skip1.689s and independent HTTP1pass3.606s+proof.
+  All62 iOS tests/both exports skipped. Build log ends BUILD INTERRUPTED, no
+  compiler-error diagnostic. Outer observer expired with running supervisor
+  receipt; shared440s actual451.113s, owned child cleanup unknown. Cleanup list
+  soft20s timed out with its command reaped/groupabsent, but simulator shutdown/
+  delete/absence checks unrun. No cause, iOS compile, generated wrapper or owned
+  simulator absence claim. Both uploads succeeded;178 bounded diagnostics retained.
+  Full evidence/digests/retention and reviewed experiment: native-run16-evidence.md.
+  This supersedes the older run16-running checkpoint below.
+- Cumulative recording SHA/source/anonymous recording/session/subject assignments
+  now survive A/B/C corrections across distinct recordings. Bound4096 typed rows,
+  strict own-assignment/duplicate checks and conservative legacy-format refusal;
+  previous receipt binds the table, no arbitrary ancestor traversal. Existing
+  reference partition constraints persist. Prior input/report bytes preserved.
+- ACTUAL Windows Node23methods23pass in4077.7863ms, including five typed A/B/C
+  cases, previous bytes unchanged, malformed/legacy/oversized evidence refusal
+  with matching receipt hashes, and existing context survival without ancestor
+  traversal. Header-shaped generated contracts only, no native decoder/media
+  execution or accuracy evidence. Leader-owned documents remain unstaged.
+- Next approved source task: periodic bounded supervisor/outer diagnostic evidence
+  and compile-before-fresh-boot experiment under same440s/shared reserves.20–35min
+  provisional after this handoff/no hard source deadline; runner scheduling remains
+  uncertain, existing prepare2/build8/test10/job30 limits. No push/newCI before
+  review. Following independent task is tiny generated two-window fixture SCOPE,
+  5–10min provisional/noharddeadline. Actual native/private/provider/real-accuracy
+  readiness remains undated until review and new execution evidence.
+
 ## Full-rep derived registry source checkpoint — October 8, 2026, 06:03 ET
 
 - Implemented `aggregate_native_windows.mjs` and explicit plan/usage guide `docs/full-rep-window-registry.md`: one selected recording/rep, exact rational boundaries, anonymous recording/session/subject groups with unknown defaults, optional named exact overlap intervals. Fresh original ledger/labels/prediction/media/PNG validation plus strict per-window evaluation file hashes, regenerated reference/report/score-core comparisons and association checks; editable receipt flags alone do not pass. Small extraction of unchanged raster checks from existing `verifyAssets` preserves that original wrapper's media check and existing validators/scorer.

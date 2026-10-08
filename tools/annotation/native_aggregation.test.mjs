@@ -14,14 +14,14 @@ import {timestampKey} from '../validate-video-manifest.mjs';
 
 const t=(value,scale=30)=>({value:String(value),timescale:scale,epoch:0});
 const movie=Buffer.from('Generated registry contract bytes only; not a video');
-async function window(root,id,{start=10,scale=30,values=[start*scale,start*scale+1,start*scale+2],mode='automatic',model='synthetic-model-a',raster=0,reviews=['visible','occluded','unreviewed'],point=100,sourceName='generated.bin',predicted=false,decoderVersion='synthetic-contract-only',permissionEvidence='Generated contracts only'}={}) {
+async function window(root,id,{start=10,scale=30,values=[start*scale,start*scale+1,start*scale+2],mode='automatic',model='synthetic-model-a',raster=0,reviews=['visible','occluded','unreviewed'],point=100,sourceName='generated.bin',predicted=false,decoderVersion='synthetic-contract-only',permissionEvidence='Generated contracts only',recording=movie,split='development',sourceGroup='synthetic-'+digest(recording)}={}) {
   const dir=path.join(root,id);await mkdir(path.join(dir,'frames'),{recursive:true});
-  await writeFile(path.join(dir,sourceName),movie);
+  await writeFile(path.join(dir,sourceName),recording);
   // Header-shaped synthetic contract bytes; not a decoder/PNG-validity claim.
   const png=Buffer.alloc(25);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);png.writeUInt32BE(400,16);png.writeUInt32BE(200,20);png[24]=raster;
   const frames=values.map((v,i)=>({id:`frame-${String(i).padStart(6,'0')}`,filename:`frame-${String(i).padStart(6,'0')}.png`,sha256:digest(png),timestamp:t(v,scale)}));
   for(const f of frames)await writeFile(path.join(dir,'frames',f.filename),png);
-  const clip={id,sha256:digest(movie),localPath:sourceName,sourceGroup:'synthetic-recording-group',split:'development',synthetic:true,permissionEvidence,lift:'synthetic',targetID:'near-side-hub',uprightWidth:400,uprightHeight:200};
+  const clip={id,sha256:digest(recording),localPath:sourceName,sourceGroup,split,synthetic:true,permissionEvidence,lift:'synthetic',targetID:'near-side-hub',uprightWidth:400,uprightHeight:200};
   const prediction={schemaVersion:1,coordinateSpace:'upright-normalized-top-left',modelID:model,runs:[{clipID:id,sha256:clip.sha256,synthetic:true,mode,uprightWidth:400,uprightHeight:200,elapsedSeconds:.1,
     samples:frames.map(f=>({timestamp:f.timestamp,point:predicted?{x:.25,y:.75}:null,confidence:predicted?.9:0,kind:predicted?(mode==='automatic'?'automatic':'tracked'):'lost',targetID:predicted?'local-track-1':null}))}]};
   const predictionBytes=Buffer.from(JSON.stringify(prediction));await writeFile(path.join(dir,'prediction.json'),predictionBytes);
@@ -39,7 +39,7 @@ async function setup(options=[{},{}]) {
   const root=await mkdtemp(path.join(os.tmpdir(),'native-aggregate-'));
   try {
     const windows=[];for(let i=0;i<options.length;i++)windows.push(await window(root,'window-'+i,options[i]));
-    const plan={schemaVersion:1,kind:'native-window-plan',repID:'generated-rep',recordingSHA256:digest(movie),interval:{start:t(300),end:t(390)},windows};
+    const plan={schemaVersion:1,kind:'native-window-plan',repID:'generated-rep',recordingSHA256:digest(options[0]?.recording??movie),interval:{start:t(300),end:t(390)},windows};
     const planFile=path.join(root,'plan.json'),output=path.join(root,'aggregated');await writeFile(planFile,JSON.stringify(plan));
     return {root,plan,planFile,output,save:()=>writeFile(planFile,JSON.stringify(plan)),run:extra=>aggregateNativeWindows({planFile,output,...extra})};
   } catch(e){await rm(root,{recursive:true,force:true});throw e;}
@@ -168,6 +168,55 @@ test('One explicitly shared canonical recording is verified once initially and o
   const r=await f.run();assert.equal(r.receipt.media.length,1);assert.equal(r.receipt.counts.distinctMediaBytes,movie.length);
   assert.equal(r.receipt.mediaReadBytes,2*movie.length);assert.equal(r.receipt.counts.uniqueWindows,2);
 }));
+
+test('A/B/C corrections retain every typed partition constraint across different recordings',async()=>{
+  for(const kind of ['recording-sha256','source-group','recording-group','session-group','subject-group']) {
+    const groupKey={'recording-group':'recordingGroupID','session-group':'sessionGroupID','subject-group':'subjectGroupID'}[kind];
+    await temporary([{sourceGroup:'source-A'}],async a=>temporary([{recording:Buffer.from('Generated recording B'),split:'training',sourceGroup:'source-B'}],async b=>
+      temporary([{recording:kind==='recording-sha256'?movie:Buffer.from('Generated recording C'),split:'holdout',sourceGroup:kind==='source-group'?'source-A':'source-C'}],async c=>{
+        if(groupKey){a.plan.groups={[groupKey]:'group-A'};b.plan.groups={[groupKey]:'group-B'};c.plan.groups={[groupKey]:'group-A'};await a.save();await b.save();await c.save();}
+        await a.run();const receiptA=path.join(a.output,'aggregation-receipt.json');
+        await b.run({previousReceiptFile:receiptA});const receiptB=path.join(b.output,'aggregation-receipt.json');
+        const original=new Map();
+        for(const f of [a,b])for(const name of ['registry.json','aggregation.json','aggregation-receipt.json']){const filename=path.join(f.output,name);original.set(filename,await readFile(filename));}
+        const prior=JSON.parse(await readFile(path.join(b.output,'registry.json')));
+        const id=kind==='recording-sha256'?digest(movie):kind==='source-group'?'source-A':'group-A';
+        assert.deepEqual(prior.partitionConstraints.assignments.find(x=>x.kind===kind&&x.id===id),{kind,id,split:'development'});
+        await assert.rejects(c.run({previousReceiptFile:receiptB}),/Cumulative recording\/group leaked across partitions/);
+        await assert.rejects(stat(c.output),{code:'ENOENT'});
+        for(const [filename,bytes] of original)assert.deepEqual(await readFile(filename),bytes);
+      })));
+  }
+});
+
+test('Legacy, missing, duplicate and oversized transitive evidence refuse even when receipt hashes match',async()=>{
+  for(const corruption of ['legacy','missing-own','duplicate','oversized'])await temporary([{}],async f=>{
+    await f.run();const registryFile=path.join(f.output,'registry.json'),receiptFile=path.join(f.output,'aggregation-receipt.json');
+    const registry=JSON.parse(await readFile(registryFile)),receipt=JSON.parse(await readFile(receiptFile));
+    if(corruption==='legacy')delete registry.partitionConstraints;
+    if(corruption==='missing-own')registry.partitionConstraints.assignments=registry.partitionConstraints.assignments.filter(x=>x.kind!=='recording-sha256');
+    if(corruption==='duplicate')registry.partitionConstraints.assignments.push({...registry.partitionConstraints.assignments[0]});
+    if(corruption==='oversized')registry.partitionConstraints.assignments=Array.from({length:4097},(_,i)=>({kind:'source-group',id:'generated-'+i,split:'development'}));
+    const bytes=Buffer.from(JSON.stringify(registry));await writeFile(registryFile,bytes);
+    receipt.files['registry.json']={sha256:digest(bytes),bytes:bytes.length};await writeFile(receiptFile,JSON.stringify(receipt));
+    const next=path.join(f.root,'refused');await assert.rejects(f.run({output:next,previousReceiptFile:receiptFile}),/transitive partition|missing its own|Duplicate cumulative|bounded cumulative/);
+    await assert.rejects(stat(next),{code:'ENOENT'});assert.deepEqual(await readFile(registryFile),bytes);
+  });
+});
+
+test('Existing reference constraints survive corrections without opening arbitrary ancestor paths',async()=>temporary([{}],async a=>
+  temporary([{recording:Buffer.from('Generated recording B'),split:'training'}],async b=>temporary([{recording:Buffer.from('Generated recording C'),sourceGroup:'earlier-existing-group',split:'holdout'}],async c=>{
+    const clip=JSON.parse(await readFile(a.plan.windows[0].ledger)).clip,existingFile=path.join(a.root,'existing.json');
+    await writeFile(existingFile,JSON.stringify({schemaVersion:1,coordinateSpace:'upright-normalized-top-left',clips:[{...clip,id:'existing',sha256:digest(Buffer.from('Earlier existing recording')),sourceGroup:'earlier-existing-group',annotations:[]}]}));
+    await a.run({existingFile});await b.run({previousReceiptFile:path.join(a.output,'aggregation-receipt.json')});
+    // Ancestor output is no longer readable at the recorded path; only explicit B is selected.
+    const saved=path.join(a.root,'saved-ancestor');await cp(a.output,saved,{recursive:true});await rm(a.output,{recursive:true});
+    await assert.rejects(c.run({previousReceiptFile:path.join(b.output,'aggregation-receipt.json')}),/Cumulative recording\/group leaked across partitions/);
+    await assert.rejects(stat(c.output),{code:'ENOENT'});
+    const inherited=JSON.parse(await readFile(path.join(b.output,'registry.json'))).partitionConstraints.assignments;
+    assert.ok(inherited.some(x=>x.kind==='source-group'&&x.id==='earlier-existing-group'&&x.split==='development'));
+    await mkdir(a.output);for(const name of ['registry.json','aggregation.json','aggregation-receipt.json'])await writeFile(path.join(a.output,name),await readFile(path.join(saved,name)));
+  }))));
 
 test('Changed original analysis/capture identity refuses even with newly valid evaluation bytes',async()=>temporary([{},{}],async f=>{
   const first=JSON.parse(await readFile(f.plan.windows[0].ledger)),w=f.plan.windows[1],ledger=JSON.parse(await readFile(w.ledger)),labels=JSON.parse(await readFile(w.labels));
