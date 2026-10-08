@@ -1,8 +1,12 @@
 # Native client / actual service HTTP boundary scope
 
-Scoped October 8, 2026 after run 37726403071. Leader accepted the proposal. The implementation checkpoint below supersedes the initial recommendation's unimplemented state; Apple execution remains pending.
+Scoped October 8, 2026 after run 37726403071. Leader accepted the proposal; implementation and Apple execution are complete for this boundary gate.
 
-## Implementation checkpoint
+## Actual Apple execution — eighth run
+
+Run [37728528425](https://github.com/mmoore950/powerlifting-app/actions/runs/37728528425) at 105815f passed the selected HTTP method (1.174 seconds, zero skipped/failures), runner execution-proof verification and phase exit 0 after controlled cleanup. Pinned tool provisioning/locked install passed. The ordinary package invocation had 42 passes plus one opt-in skip; that skip is not an additional pass. All 53 simulator methods passed separately. Artifact 11529566112 and logs/digests/timing are preserved in docs/status.md. Contract phase about five seconds below its three-minute limit; whole job about 11m06 below 30 minutes. No repeat CI for documentation. Public TLS/iOS networking/rendered browsing/approved hosting/actual recurring upstream freshness remain outside this acceptance.
+
+## Historical implementation checkpoint — native execution superseded above
 
 - Shared original synthetic row/CSV helpers; 54-row boundary fixture (29 exact names, 26 qualifying rankings, 26 Alice #1 history rows), existing importer/server/QueryPool, ephemeral 127.0.0.1 listener and parent-owned temporary root. Explicit expected identities/order/totals and fixed version digest in Swift; no full dataset/upstream request.
 - Added one macOS-only opt-in OPLHTTPContractTests method. Exact HTTPS fixture origin adapter rejects alternate schemes/hosts/ports/userinfo/fragments, preserves encoded path/query and invokes OPLURLSessionTransport. Added actual paginated metadata/search/history/rankings/plus-class/version-error assertions; no production code or ATS changes.
