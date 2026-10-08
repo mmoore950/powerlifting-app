@@ -4,6 +4,8 @@ October8,2026. Source route approved by leader; attachment preservation is **not
 
 Update October8, approximately03:18ET: tenth run37740222229 failed in `XCTContext.runActivity` during attachment preservation; its artifact upload also failed and GitHub lists no artifact. No successful generated attachment transport or reconstruction exists. Local repair uses the explicit `XCTestCase.add(_:)` association instead of implicit activity context and preserves plain diagnostics in a separate artifact. The same named test selection and byte bounds below apply after a later approved successful run; no inference from the crashed test or ordinary UI images is permitted.
 
+Update approximately03:40ET: eleventh37742662513 atcd3a34c passed the selected rotated capture test and all14app-host methods, but the overall test step timed out during UI startup. Both uploaded ZIPs are downloaded/hash verified locally. Export was skipped and there is NO exported attachment manifest. This establishes repaired attachment API execution, not a preserved-byte native-to-wrapper round trip. Raw xcresult records are not substituted for the bounded successful-run/exact manifest selection below; actual reconstruction remains pending. A local ignored reconstruction helper is prepared, not an already executed production extractor.
+
 ## Select evidence, not arbitrary PNGs
 
 1. Require a later approved job's exact revision, successful completion, successful selected capture test and successful artifact export. Download its artifact, verify GitHub's ZIP byte count/SHA-256, then extract into a fresh ignored local directory with entry/count/size/traversal/symlink bounds. The existing ninth artifact contains ONLY UI smoke images and cannot supply this fixture.
