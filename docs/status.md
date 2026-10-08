@@ -1,5 +1,20 @@
 # Worker status
 
+## Same warm device experiment proposed — October 8, 2026, 07:03 ET
+
+- Scope only in native-same-owned-device-scope.md: retain original compile/fresh
+  ownership/readiness, then UI and non-UI sequentially on verified owned UDID,
+  separate result bundles/exports/exact inventory. Recommended bounded matching
+  Booted observation before non-UI consumes same560s budget; no reset/reboot or
+  ownership bypass. Existing test10/job30/build8/cleanup2 bounds unchanged.
+- Source UI defers termination, changes no settings/import/data; app-host media/
+  export tests use UUID roots. Shared-device process isolation is not independent
+  clean persistent state. Switching/timeout/CoreSimulator405 cause remains
+  unproven. No implementation or CI/push. Scope finished within5–10min target/
+  noharddeadline. Review decision timing unknown; re-estimate on response.
+  If approved source15–25min provisional; native15–22min afterstart uncertain,
+  no feature/provider/private/accuracy readiness date. Generated walkthrough next.
+
 ## Run17 diagnosed; two-window source ready for review — October 8, 2026, 07:00 ET
 
 - Run37764499138 at reviewed47b406b completed failure. Actual downloaded198365-
