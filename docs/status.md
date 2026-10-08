@@ -1,5 +1,29 @@
 # Worker status
 
+## Tiny generated two-window native proof scoped — October 8, 2026, 06:39 ET
+
+- Scope only in generated-two-window-native-scope.md: reuse existing rotated
+  asymmetric writer/native capture/oracle on one128x96/15frame30fps generated
+  recording. Nonzero A0.1...0.3/B1/6...0.4, distinct original clip/analysis/session
+  IDs, intended shared actual PTS5/30,7/30,9/30 with unchanged component tuples.
+  Decoder output is authoritative; noFPS/zero-offset rewrite. Perwindow1...6frames,
+  <=20files/1MiBfile/2MiBtransport withone source plusdistinct named JSON/PNGs.
+- Exact future successful unit-manifest group/type/name mapping remains unobserved;
+  no native/transport implementation or CI here. Fresh reconstruction verifies
+  original source/prediction/PNG/bundle bytes; explicit all-unreviewed GENERATED
+  envelopes pass the existing evaluator twice and aggregate selected exact plan.
+  Intended9raw/6unique/3shared/0reviewed/0observed, scalarMetricsnull/accuracyfalse/
+  continuityunverified, no prediction equality/trackidentity/truth/accuracy claim.
+- Proposal adds one native method (63required if soleaddition), retains single-
+  window proof and both exports/current validators/bounds. Actual source/native
+  counts remain62 until implementation. Source implementation estimated20–35min
+  after leader approval/noharddeadline; exact attachment transport/decoding and
+  CI lifetime/sequential experiment acceptance remain uncertain. No extraction/
+  readiness ETA until actual reviewed successful bytes exist; re-estimate then.
+- Scope complete within5–10min provisional estimate after lifetime-fix handoff.
+  Next decision is leader review/implementation dispatch; current47b406b source
+  fix also awaits review, no push/newCI. Realreferenceszero/accuracyunmeasured.
+
 ## Persistent supervisor diagnostic failure correction — October 8, 2026, 06:35 ET
 
 - Leader review of3b364a8 identified that supervisor progress persistence could
