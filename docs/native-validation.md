@@ -46,6 +46,8 @@ Review all five screenshots for clipping, unreadable text, navigation visibility
 
 ## Later gates
 
+VideoMediaLifecycleTests adds four app-host integration methods using tiny runtime-generated synthetic MOVs in owned temporary roots. They exercise import metadata and decoded upright geometry, invalid-media cleanup, managed/source ownership, and explicit model player detach/replacement/removal with failed replacement preservation. The store/model injection defaults preserve production storage and security-scoped access. Await the returned import task for completion; no sleep-based synchronization. These new methods initially await the next Apple run. They do not measure actual bar detection, observer count/deinit timing, large/private video or device performance; those remain separate acceptance work.
+
 Native service recovery: run OPLRecoveryTests and OPLPageStoreTests, then exercise live 409 expiration, 503 busy, 504 timeout, offline fallback and repository/foreground changes on Simulator. Verify automatic first-page restart happens at most once per logical query budget; old cursor/rows are discarded, metadata adoption does not cause another transaction, and explicit Try again works. See native-service-recovery.md.
 
 The data and video gates in `research-gates.md` are independent. Passing plate UI checks does not validate daily ingestion or automatic bar identification.

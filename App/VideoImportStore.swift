@@ -39,8 +39,11 @@ struct PickedMovie: Transferable {
 }
 
 actor VideoImportStore {
+    private let rootDirectory: URL?
+    init(rootDirectory: URL? = nil) { self.rootDirectory = rootDirectory }
+
     private func directory() throws -> URL {
-        var root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+        var root = try rootDirectory ?? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
             appropriateFor: nil, create: true).appendingPathComponent("ImportedVideos", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         var values = URLResourceValues(); values.isExcludedFromBackup = true

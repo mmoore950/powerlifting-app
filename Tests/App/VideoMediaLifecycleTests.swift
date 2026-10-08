@@ -1,0 +1,207 @@
+import XCTest
+import AVFoundation
+import CoreVideo
+@testable import PowerliftingApp
+
+final class VideoMediaLifecycleTests: XCTestCase {
+    @MainActor
+    func testGeneratedMovieImportsWithUprightMetadataAndDecodes() async throws {
+        let root = try temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("source.mov")
+        try await SyntheticMovieWriter.write(to: source)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        let store = VideoImportStore(rootDirectory: managed)
+        let imported = try await store.ingest(source)
+        XCTAssertEqual(imported.url.deletingLastPathComponent(), managed)
+        XCTAssertNotEqual(imported.url, source)
+        XCTAssertEqual(imported.duration, 0.3, accuracy: 0.02)
+        XCTAssertEqual(imported.width, 48, accuracy: 0.001)
+        XCTAssertEqual(imported.height, 64, accuracy: 0.001)
+        XCTAssertEqual(try Data(contentsOf: imported.url), try Data(contentsOf: source))
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: imported.url))
+        generator.appliesPreferredTrackTransform = true
+        let frame = try await generator.image(at: .zero)
+        XCTAssertEqual(frame.image.width, 48)
+        XCTAssertEqual(frame.image.height, 64)
+        try await store.remove(imported.url)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: imported.url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+    }
+
+    func testInvalidMediaLeavesNoManagedCopyAndKeepsSource() async throws {
+        let root = try temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("invalid.mov")
+        let bytes = Data("Synthetic invalid media, not a movie".utf8)
+        try bytes.write(to: source)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        let store = VideoImportStore(rootDirectory: managed)
+        do { _ = try await store.ingest(source); XCTFail("Invalid movie accepted") }
+        catch { XCTAssertFalse(error is CancellationError) }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: managed.path), [])
+        XCTAssertEqual(try Data(contentsOf: source), bytes)
+    }
+
+    func testRemovalRefusesSourceAndClearPreservesUnmanagedFile() async throws {
+        let root = try temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("source.mov")
+        try await SyntheticMovieWriter.write(to: source)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        let store = VideoImportStore(rootDirectory: managed)
+        let imported = try await store.ingest(source)
+        do { try await store.remove(source); XCTFail("Source removal accepted") }
+        catch VideoImportError.unsupported {} catch { XCTFail("Unexpected refusal: \(error)") }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: imported.url.path))
+        let sentinel = managed.appendingPathComponent("unmanaged.txt")
+        try Data("owned test sentinel".utf8).write(to: sentinel)
+        try await store.clearManagedCopies()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: imported.url.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sentinel.path))
+    }
+
+    @MainActor
+    func testModelReplacementDetachesPlayersAndFailedImportPreservesCurrentVideo() async throws {
+        let root = try temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let first = root.appendingPathComponent("first.mov")
+        let second = root.appendingPathComponent("second.mov")
+        try await SyntheticMovieWriter.write(to: first)
+        try FileManager.default.copyItem(at: first, to: second)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        let model = VideoModel(store: VideoImportStore(rootDirectory: managed))
+        await model.importFile(first).value
+        XCTAssertNil(model.error)
+        let firstCopy = try XCTUnwrap(model.video?.url)
+        let firstPlayer = try XCTUnwrap(model.player)
+        XCTAssertNotNil(firstPlayer.currentItem)
+
+        let invalid = root.appendingPathComponent("invalid.mov")
+        try Data("Synthetic invalid replacement".utf8).write(to: invalid)
+        await model.importFile(invalid).value
+        XCTAssertNotNil(model.error)
+        XCTAssertEqual(model.video?.url, firstCopy)
+        XCTAssertTrue(model.player === firstPlayer)
+        XCTAssertNotNil(firstPlayer.currentItem)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: managed.path).count, 1)
+
+        await model.importFile(second).value
+        XCTAssertNil(model.error)
+        XCTAssertFalse(model.importing)
+        let secondCopy = try XCTUnwrap(model.video?.url)
+        let secondPlayer = try XCTUnwrap(model.player)
+        XCTAssertNotEqual(firstCopy, secondCopy)
+        XCTAssertNil(firstPlayer.currentItem)
+        XCTAssertNotNil(secondPlayer.currentItem)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: firstCopy.path))
+        await model.removeVideo()
+        XCTAssertNil(secondPlayer.currentItem)
+        XCTAssertNil(model.player); XCTAssertNil(model.video)
+        XCTAssertNil(model.trace); XCTAssertNil(model.analysisResult)
+        XCTAssertFalse(model.playing); XCTAssertEqual(model.seconds, 0)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: managed.path), [])
+        for source in [first, second, invalid] {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        }
+    }
+
+    private func temporaryRoot() throws -> URL {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("media-tests-" + UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        return root
+    }
+}
+
+/// Test-only encoder. Mutable state and writer operations are confined to one serial queue.
+/// The unchecked conformance permits AVFoundation callbacks to retain this queue-owned state;
+/// no mutable field is accessed from the calling task or the writer completion queue.
+private final class SyntheticMovieWriter: @unchecked Sendable {
+    private let queue = DispatchQueue(label: "synthetic-movie-writer")
+    private let writer: AVAssetWriter
+    private let input: AVAssetWriterInput
+    private let adaptor: AVAssetWriterInputPixelBufferAdaptor
+    private let destination: URL
+    private var nextFrame = 0
+    private var completed = false
+    private let completion: @Sendable (Result<Void, Error>) -> Void
+
+    static func write(to url: URL) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                let encoder = try SyntheticMovieWriter(destination: url) { continuation.resume(with: $0) }
+                encoder.start()
+            } catch { continuation.resume(throwing: error) }
+        }
+    }
+
+    private init(destination: URL, completion: @escaping @Sendable (Result<Void, Error>) -> Void) throws {
+        self.destination = destination; self.completion = completion
+        writer = try AVAssetWriter(outputURL: destination, fileType: .mov)
+        input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 64, AVVideoHeightKey: 48])
+        input.expectsMediaDataInRealTime = false
+        input.transform = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 48, ty: 0)
+        adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: 64, kCVPixelBufferHeightKey as String: 48])
+        guard writer.canAdd(input) else { throw failure("Encoder cannot add video input") }
+        writer.add(input)
+    }
+
+    private func start() {
+        queue.async { [self] in
+            guard writer.startWriting() else { finish(.failure(writer.error ?? failure("Encoder did not start"))); return }
+            writer.startSession(atSourceTime: .zero)
+            queue.asyncAfter(deadline: .now() + 10) { [self] in
+                guard !completed else { return }
+                writer.cancelWriting()
+                finish(.failure(failure("Synthetic encoder exceeded 10-second budget")))
+            }
+            input.requestMediaDataWhenReady(on: queue) { [self] in appendReadyFrames() }
+        }
+    }
+
+    private func appendReadyFrames() {
+        guard !completed, nextFrame < 3 else { return }
+        do {
+            while input.isReadyForMoreMediaData, nextFrame < 3 {
+                var buffer: CVPixelBuffer?
+                let status = CVPixelBufferCreate(kCFAllocatorDefault, 64, 48, kCVPixelFormatType_32BGRA, nil, &buffer)
+                guard status == kCVReturnSuccess, let buffer else { throw failure("Pixel buffer creation failed") }
+                CVPixelBufferLockBaseAddress(buffer, [])
+                guard let base = CVPixelBufferGetBaseAddress(buffer) else {
+                    CVPixelBufferUnlockBaseAddress(buffer, []); throw failure("Pixel buffer has no base address")
+                }
+                memset(base, Int32(64 + nextFrame * 32), CVPixelBufferGetBytesPerRow(buffer) * 48)
+                CVPixelBufferUnlockBaseAddress(buffer, [])
+                guard adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(nextFrame), timescale: 10)) else {
+                    throw writer.error ?? failure("Frame append failed")
+                }
+                nextFrame += 1
+            }
+            if nextFrame == 3 {
+                writer.endSession(atSourceTime: CMTime(value: 3, timescale: 10))
+                input.markAsFinished()
+                writer.finishWriting { [self] in
+                    queue.async { [self] in
+                        if writer.status == .completed { finish(.success(())) }
+                        else { finish(.failure(writer.error ?? failure("Encoder did not finish"))) }
+                    }
+                }
+            }
+        } catch { writer.cancelWriting(); finish(.failure(error)) }
+    }
+
+    private func finish(_ result: Result<Void, Error>) {
+        guard !completed else { return }
+        completed = true
+        if case .failure = result { try? FileManager.default.removeItem(at: destination) }
+        completion(result)
+    }
+
+    private func failure(_ message: String) -> NSError {
+        NSError(domain: "SyntheticMovieWriter", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+}

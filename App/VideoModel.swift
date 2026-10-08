@@ -19,7 +19,7 @@ final class VideoModel: ObservableObject {
     @Published private(set) var processingProgress = 0.0
     @Published private(set) var processingStatus = ""
     @Published private(set) var analysisResult: BarAnalysisResult?
-    private let store = VideoImportStore()
+    private let store: VideoImportStore
     private let analyzer = BarAnalysisService()
     private let predictionExporter = BarPredictionExporter()
     private var analysisTask: Task<Void, Never>?
@@ -31,14 +31,17 @@ final class VideoModel: ObservableObject {
     private var itemObservation: NSKeyValueObservation?
     private var importTask: Task<Void, Never>?
 
-    func importFile(_ url: URL, temporary: Bool = false) {
+    init(store: VideoImportStore = VideoImportStore()) { self.store = store }
+
+    @discardableResult
+    func importFile(_ url: URL, temporary: Bool = false) -> Task<Void, Never> {
         generation += 1; let request = generation
         importTask?.cancel()
         pause()
         cancelProcessing()
         let previousAnalysis = analysisTask
         importing = true; error = nil
-        importTask = Task {
+        let task = Task {
             defer {
                 if temporary { try? FileManager.default.removeItem(at: url) }
                 if request == generation { importing = false }
@@ -71,6 +74,8 @@ final class VideoModel: ObservableObject {
                 if request == generation, !(error is CancellationError) { self.error = error.localizedDescription }
             }
         }
+        importTask = task
+        return task
     }
     func togglePlayback() {
         guard !processing, let player else { return }
