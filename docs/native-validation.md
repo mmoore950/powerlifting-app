@@ -99,7 +99,7 @@ second command. `test-phases.json` records the aggregate and partial/unrun phase
 An outer observation failure stops only the owned supervisor wrapper and reports
 unverified child cleanup, never successful cleanup of escaped sessions/services.
 
-The current named XCTest source inventory is46core+21app-host+1UI=68 iOS methods;
+The current named XCTest source inventory is47core+22app-host+1UI=70 iOS methods;
 the additional generated two-window method is source only and absent fromrun17.
 the HTTP test is entirely macOS-only, so iOS has no expected HTTP skip. Its separate
 actual HTTP gate and macOS opt-in skip remain. `check-test-inventory.py` requires
@@ -245,3 +245,29 @@ The fixture `sourceName` rename and this editor still require Apple compilation.
   Windows source inspection and existing store test source do not establish it.
 
 No native/keyboard/accessibility pass or release readiness is claimed here.
+
+## Imported-video loss review interaction gate
+
+Later loss-navigation source is excluded from run20's exact cb26556/68-method
+revision. The two new named methods bring current expected source inventory to
+70; they are uncompiled/unrun until a later reviewed Apple run.
+
+- Review no-loss, all-lost and several separated explicit-loss episodes. Counts
+  distinguish abstaining frames from consecutive lost-sample runs; low heuristic
+  confidence, sparse timestamps and annotations are not silently reclassified as
+  explicit loss. Previous/Next preserve original sample indices and first actual
+  rational timestamp, with correct first/last enabled states.
+- Confirm that each review pauses and waits for seek completion; the selected
+  episode is published only after success. Show actual player time separately
+  from the requested observed timestamp; verify the visible frame. This does not
+  establish target identity, true continuous gap duration or exact decoder parity.
+- Rapidly jump, scrub, play/pause, replace a clip/analysis, change trim, tap a manual
+  reference, clear or remove the clip while a jump is pending. Obsolete completion
+  must not publish episode/time/message, issue a queued stale seek, or clear a
+  newer pending operation. Failure must report that no reviewed frame was selected.
+- The generated movie regression source performs one real AVPlayer seek; delayed
+  injected completions separately exercise request/lifetime guards and failures.
+  It is not real-bar tracking accuracy or a rendered/VoiceOver pass.
+- Check VoiceOver action labels, selected episode announcement, first/last disabled
+  controls, no-loss wording and large Dynamic Type wrapping. Existing manual taps
+  remain reference annotations; loss review does not restart or join tracking.

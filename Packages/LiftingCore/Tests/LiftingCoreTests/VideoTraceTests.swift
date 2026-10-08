@@ -37,6 +37,27 @@ final class VideoTraceTests: XCTestCase {
         let decoded = try JSONDecoder().decode(VideoTrace.self, from: JSONEncoder().encode(trace))
         XCTAssertEqual(decoded.samples.count, samples.count)
     }
+    func testExplicitLossRunsPreserveOriginalIndicesWithoutInferringMissingIntervals() throws {
+        let point = try VideoPoint(x: 0.5, y: 0.5)
+        let samples = try [
+            VideoTraceSample(seconds: 1, point: nil, confidence: 0, kind: .lost),
+            VideoTraceSample(seconds: 1.1, point: nil, confidence: 0, kind: .lost),
+            VideoTraceSample(seconds: 1.2, point: point, confidence: 0.1, kind: .tracked),
+            VideoTraceSample(seconds: 2, point: nil, confidence: 0, kind: .lost),
+            VideoTraceSample(seconds: 2.1, point: point, confidence: 1, kind: .manualReference),
+            VideoTraceSample(seconds: 2.2, point: nil, confidence: 0, kind: .lost)]
+        let trace = try VideoTrace(start: 1, end: 3, samples: samples)
+        XCTAssertEqual(trace.lossRuns.map(\.firstSampleIndex), [0, 3, 5])
+        XCTAssertEqual(trace.lossRuns.map(\.lastSampleIndex), [1, 3, 5])
+        XCTAssertEqual(trace.lossRuns.map(\.frameCount), [2, 1, 1])
+        XCTAssertEqual(trace.lossRuns.map { trace.samples[$0.firstSampleIndex].seconds }, [1, 2, 2.2])
+        XCTAssertTrue(try VideoTrace(start: 1, end: 3, samples: []).lossRuns.isEmpty)
+        XCTAssertTrue(try VideoTrace(start: 1, end: 3, samples: [samples[2], samples[4]]).lossRuns.isEmpty)
+        let allLost = try VideoTrace(start: 1, end: 3, samples: [samples[0], samples[1], samples[3]])
+        XCTAssertEqual(allLost.lossRuns.count, 1)
+        XCTAssertEqual(allLost.lossRuns.first?.lastSampleIndex, 2)
+        XCTAssertEqual(allLost.lossRuns.first?.frameCount, 3)
+    }
     func testInvalidRangesUnorderedSamplesAndMalformedDecoding() throws {
         let point = try VideoPoint(x: 0.5, y: 0.5)
         XCTAssertThrowsError(try VideoPoint(x: .nan, y: 0))

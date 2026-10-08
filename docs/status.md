@@ -1,5 +1,38 @@
 # Worker status
 
+## Video loss-review navigation source checkpoint — October 8, 2026, 08:09 ET
+
+- Approved implementation derives consecutive explicit lost-sample runs, retaining
+  original first/last indices and abstaining-frame counts. Low confidence, sparse
+  time intervals and accepted/manual samples are not silently reclassified as
+  explicit loss. UI shows separate frame/run counts and Previous/Next review,
+  requested observed time versus actual playhead, no-loss wording and annotation
+  limitations. No interpolation, detector, tracker or evaluation format change.
+- Review pauses and seeks with the original value/timescale/epoch at the first
+  sample, validates correspondence to the selected rep, and publishes selected
+  episode/playhead/message only after successful completion. Pre/post async guards
+  bind player, clip, analysis and playback request; queued cancelled seeks cannot
+  launch. Scrub/play/pause/new jump/removal and published analysis/trim/clip changes
+  invalidate pending publication. Tick reads current player time to avoid delayed
+  periodic callback values replacing the confirmed seek time.
+- One core grouping regression and one generated-media/delayed seek app regression
+  added as SOURCE ONLY. The app method separately performs a real AVPlayer seek,
+  then holds completions for scrub/play/newer jump/failure/analysis/trim/clip guards;
+  expected callbacks have a 5s test timeout and deferred release. Analyze now
+  returns its existing joined task so generated tests can await completion. The
+  narrow injected loss-seek operation defaults to the existing AVPlayer API.
+- Windows UTF-8/whitespace/source inventory checks passed. Current expected methods
+  are 47 core + 22 app-host + 1 UI = 70, uncompiled/unrun. No Swift or native pass
+  claimed; run20 remains exact earlier cb26556 with 68 expected methods. Connector
+  reports run20 macOS core/HTTP/prepare/build steps passed and split tests active;
+  exact counts/device/runtime/export/cleanup receipts still pending.
+- Source checkpoint complete ahead of20–35min provisional/noharddeadline. Leader
+  review next (response ETA unknown); preauthorized empty/first/last/accessibility
+  source audit follows, expected5–10min/noharddeadline, actual interaction pending.
+  Run20 result15–22min after07:59start provisional/build8/test10/job30 limits;
+  outcome/export priority, no newpush/CI/retry. Private accuracy, production/device/
+  release readiness remain separate and undated.
+
 ## Run20 dispatched; video loss-review gap scope — October 8, 2026, 08:01 ET
 
 - Reviewed cb26556475b1080ff58796b826c76f2220e1efe4 pushed exactly to existing

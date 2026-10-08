@@ -54,8 +54,30 @@ struct VideoAnalysisView: View {
                             if !model.processingStatus.isEmpty { Text(model.processingStatus).font(.caption) }
                         }
                         if let analysis = model.analysisResult {
-                            Text("\(analysis.mode.rawValue) · \(analysis.timestamps.count) actual-time frames · \(analysis.gaps) gaps · \(analysis.elapsed.formatted(.number.precision(.fractionLength(1)))) s processing").font(.caption)
+                            Text("\(analysis.mode.rawValue) · \(analysis.timestamps.count) actual-time frames · \(analysis.gaps) abstaining frames · \(analysis.elapsed.formatted(.number.precision(.fractionLength(1)))) s processing").font(.caption)
                             Text("Automatic shape/continuity scores are uncalibrated heuristics. Manual mode uses Vision confidence; neither establishes bar identity accuracy.").font(.caption)
+                            Text("\(model.lossRuns.reduce(0) { $0 + $1.frameCount }) abstaining frames in \(model.lossRuns.count) consecutive loss episodes.")
+                                .font(.caption).accessibilityAddTraits(.isHeader)
+                            if !model.lossRuns.isEmpty {
+                                HStack {
+                                    Button("Previous loss") {
+                                        if let index = model.previousLossRunIndex { model.reviewLossRun(index) }
+                                    }.disabled(model.previousLossRunIndex == nil || model.processing || model.importing)
+                                        .accessibilityHint("Pauses and seeks to the first observed sample of the previous loss episode.")
+                                    Button(model.selectedLossRunIndex == nil ? "Review first loss" : "Next loss") {
+                                        if let index = model.nextLossRunIndex { model.reviewLossRun(index) }
+                                    }.disabled(model.nextLossRunIndex == nil || model.processing || model.importing)
+                                        .accessibilityHint("Pauses and seeks to the first observed sample of the next loss episode. Does not restart tracking.")
+                                }.buttonStyle(.bordered)
+                                if model.lossSeekPending { ProgressView("Seeking to loss sample") }
+                                if let message = model.lossReviewMessage {
+                                    Text(message).font(.caption).lineLimit(nil).fixedSize(horizontal: false, vertical: true)
+                                }
+                                Text("Loss episodes group consecutive decoded samples with no accepted target. They do not establish the cause or a continuous missing interval. Manual taps remain annotations; a new manual analysis starts from the selected rep start.")
+                                    .font(.caption).lineLimit(nil).fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Text("No explicit lost samples in this analysis. This does not establish correct target identification.").font(.caption)
+                            }
                         }
                         Text("Pause and tap the near-side bar hub to mark a manual reference point. These points are annotations, not automatic tracking. Points across gaps are never joined into an invented path.").font(.caption)
                         Text("\(model.trace?.samples.filter { $0.kind == .manualReference }.count ?? 0) manual reference points")
@@ -207,6 +229,6 @@ private struct VideoPreview: View {
                     })
                 }
             }
-        }.accessibilityLabel("Video preview with manual reference point overlay")
+        }.accessibilityLabel("Video preview with experimental tracking and manual reference overlays")
     }
 }

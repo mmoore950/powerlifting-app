@@ -107,10 +107,131 @@ final class VideoMediaLifecycleTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testGeneratedLossSeekUsesActualPTSAndRejectsDelayedObsoleteCompletions() async throws {
+        let root = try temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("loss-review.mov")
+        try await SyntheticMovieWriter.write(to: source)
+        let probe = DelayedLossSeek()
+        defer { probe.finishAll() }
+        let model = VideoModel(store: VideoImportStore(rootDirectory: root.appendingPathComponent("managed")),
+            lossSeek: probe.seek)
+        await model.importFile(source).value
+        model.seek(0.1); model.setEnd()
+        await model.analyze(mode: .automatic).value
+        XCTAssertNil(model.error)
+        let analysis = try XCTUnwrap(model.analysisResult)
+        let run = try XCTUnwrap(model.lossRuns.first)
+        let actualPTS = analysis.timestamps[run.firstSampleIndex]
+        XCTAssertNil(model.previousLossRunIndex); XCTAssertEqual(model.nextLossRunIndex, 0)
+
+        let first = model.reviewLossRun(0)
+        try await probe.waitForRequest(0)
+        XCTAssertEqual(probe.times[0].value, Int64(actualPTS.value))
+        XCTAssertEqual(probe.times[0].timescale, actualPTS.timescale)
+        XCTAssertEqual(probe.times[0].epoch, actualPTS.epoch)
+        XCTAssertNil(model.selectedLossRunIndex); XCTAssertTrue(model.lossSeekPending)
+        let player = try XCTUnwrap(model.player)
+        let completed = await player.seek(to: probe.times[0], toleranceBefore: .zero, toleranceAfter: .zero)
+        XCTAssertTrue(completed)
+        probe.finish(0, completed: completed); await first.value
+        XCTAssertEqual(model.selectedLossRunIndex, 0); XCTAssertFalse(model.lossSeekPending)
+        XCTAssertNotNil(model.lossReviewMessage)
+        if model.lossRuns.count == 1 { XCTAssertNil(model.nextLossRunIndex) }
+
+        let queued = model.reviewLossRun(0)
+        model.seek(0.05)
+        await queued.value
+        XCTAssertEqual(probe.times.count, 1, "Cancelled queued jump must not issue a seek")
+
+        let scrubbed = model.reviewLossRun(0)
+        try await probe.waitForRequest(1)
+        model.seek(0.05)
+        probe.finish(1, completed: true); await scrubbed.value
+        XCTAssertNil(model.selectedLossRunIndex); XCTAssertNil(model.lossReviewMessage)
+        XCTAssertFalse(model.lossSeekPending)
+
+        let played = model.reviewLossRun(0)
+        try await probe.waitForRequest(2)
+        model.togglePlayback()
+        probe.finish(2, completed: true); await played.value
+        XCTAssertNil(model.selectedLossRunIndex); XCTAssertFalse(model.lossSeekPending)
+        model.pause()
+
+        let older = model.reviewLossRun(0)
+        try await probe.waitForRequest(3)
+        let newer = model.reviewLossRun(0)
+        try await probe.waitForRequest(4)
+        probe.finish(3, completed: true); await older.value
+        XCTAssertTrue(model.lossSeekPending); XCTAssertNil(model.selectedLossRunIndex)
+        probe.finish(4, completed: false); await newer.value
+        XCTAssertFalse(model.lossSeekPending); XCTAssertNil(model.selectedLossRunIndex)
+        XCTAssertNotNil(model.error); XCTAssertNil(model.lossReviewMessage)
+
+        let replacedAnalysis = model.reviewLossRun(0)
+        try await probe.waitForRequest(5)
+        await model.analyze(mode: .automatic).value
+        XCTAssertNotEqual(model.analysisResult?.analysisID, analysis.analysisID)
+        probe.finish(5, completed: true); await replacedAnalysis.value
+        XCTAssertNil(model.selectedLossRunIndex); XCTAssertNil(model.lossReviewMessage)
+
+        let trimmed = model.reviewLossRun(0)
+        try await probe.waitForRequest(6)
+        model.setEnd()
+        probe.finish(6, completed: true); await trimmed.value
+        XCTAssertNil(model.analysisResult); XCTAssertTrue(model.lossRuns.isEmpty)
+        XCTAssertNil(model.selectedLossRunIndex); XCTAssertNil(model.nextLossRunIndex)
+
+        model.seek(0.1); model.setEnd()
+        await model.analyze(mode: .automatic).value
+        let replacedClip = model.reviewLossRun(0)
+        try await probe.waitForRequest(7)
+        await model.importFile(source).value
+        probe.finish(7, completed: true); await replacedClip.value
+        XCTAssertNil(model.analysisResult); XCTAssertNil(model.selectedLossRunIndex)
+        XCTAssertFalse(model.lossSeekPending)
+        await model.removeVideo()
+    }
+
     private func temporaryRoot() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("media-tests-" + UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
         return root
+    }
+}
+
+/// Holds only loss-review completions; the first case separately exercises real AVPlayer seek.
+@MainActor
+private final class DelayedLossSeek {
+    private var continuations: [Int: CheckedContinuation<Bool, Never>] = [:]
+    private var waiters: [Int: CheckedContinuation<Void, Error>] = [:]
+    private(set) var times: [CMTime] = []
+    func seek(_ player: AVPlayer, _ time: CMTime) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let index = times.count
+            times.append(time); continuations[index] = continuation
+            waiters.removeValue(forKey: index)?.resume()
+        }
+    }
+    func waitForRequest(_ index: Int) async throws {
+        if times.indices.contains(index) { return }
+        let deadline = Task {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            waiters.removeValue(forKey: index)?.resume(throwing: NSError(domain: "LossSeekTest", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Expected loss seek was not issued within 5 seconds"]))
+        }
+        defer { deadline.cancel() }
+        try await withCheckedThrowingContinuation { waiters[index] = $0 }
+    }
+    func finish(_ index: Int, completed: Bool) {
+        continuations.removeValue(forKey: index)?.resume(returning: completed)
+    }
+    func finishAll() {
+        let pending = continuations.values; continuations = [:]
+        for continuation in pending { continuation.resume(returning: false) }
+        let pendingWaits = waiters.values; waiters = [:]
+        for waiter in pendingWaits { waiter.resume(throwing: CancellationError()) }
     }
 }
 

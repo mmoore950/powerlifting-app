@@ -18,7 +18,7 @@ final class VideoModel: ObservableObject {
     @Published private(set) var cancelling = false
     @Published private(set) var processingProgress = 0.0
     @Published private(set) var processingStatus = ""
-    @Published private(set) var analysisResult: BarAnalysisResult?
+    @Published private(set) var analysisResult: BarAnalysisResult? { didSet { resetLossReview() } }
     @Published private(set) var preparedAnnotationExport: PreparedAnnotationExport?
     @Published private(set) var savingAnnotationExport = false
     @Published private(set) var annotationExportRecoveryNeeded = false
@@ -26,6 +26,7 @@ final class VideoModel: ObservableObject {
     private let store: VideoImportStore
     private let annotationExports: AnnotationExportStore
     private let analyzer = BarAnalysisService()
+    private let lossSeek: @MainActor (AVPlayer, CMTime) async -> Bool
     private let predictionExporter = BarPredictionExporter()
     private var analysisTask: Task<Void, Never>?
     private var captureTask: Task<URL, Error>?
@@ -36,12 +37,28 @@ final class VideoModel: ObservableObject {
     private var observerCleanup: (@MainActor @Sendable () -> Void)?
     private var generation = 0
     private var playerGeneration = 0
+    @Published private(set) var selectedLossRunIndex: Int?
+    @Published private(set) var lossSeekPending = false
+    @Published private(set) var lossReviewMessage: String?
+    private var lossJumpTask: Task<Void, Never>?
+    var lossRuns: [VideoLossRun] { analysisResult?.trace.lossRuns ?? [] }
+    var nextLossRunIndex: Int? {
+        let next = selectedLossRunIndex.map { $0 + 1 } ?? 0
+        return lossRuns.indices.contains(next) ? next : nil
+    }
+    var previousLossRunIndex: Int? {
+        guard let selectedLossRunIndex, selectedLossRunIndex > 0 else { return nil }
+        return selectedLossRunIndex - 1
+    }
     private var playbackRequest = 0
     private var itemObservation: NSKeyValueObservation?
     private var importTask: Task<Void, Never>?
 
-    init(store: VideoImportStore = VideoImportStore(), annotationExports: AnnotationExportStore = .shared) {
-        self.store = store; self.annotationExports = annotationExports
+    init(store: VideoImportStore = VideoImportStore(), annotationExports: AnnotationExportStore = .shared,
+         lossSeek: @escaping @MainActor (AVPlayer, CMTime) async -> Bool = { player, time in
+             await player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+         }) {
+        self.store = store; self.annotationExports = annotationExports; self.lossSeek = lossSeek
     }
 
     @discardableResult
@@ -97,10 +114,11 @@ final class VideoModel: ObservableObject {
         guard !processing, let player else { return }
         if playing { pause() }
         else {
-            playbackRequest += 1; let request = playbackRequest
+            pause(); let request = playbackRequest
             let destination = start
             let needsSeek = seconds < start || seconds >= end
             Task {
+                guard request == playbackRequest, self.player === player else { return }
                 if needsSeek {
                     let completed = await player.seek(to: CMTime(seconds: destination, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
                     guard completed else { return }
@@ -110,10 +128,71 @@ final class VideoModel: ObservableObject {
             }
         }
     }
-    func pause() { playbackRequest += 1; player?.pause(); playing = false }
+    func pause() {
+        playbackRequest += 1
+        lossJumpTask?.cancel(); lossJumpTask = nil
+        if lossSeekPending { player?.currentItem?.cancelPendingSeeks() }
+        lossSeekPending = false
+        player?.pause(); playing = false
+    }
+    private func resetLossReview() {
+        pause(); selectedLossRunIndex = nil; lossReviewMessage = nil
+    }
+    /// Navigation reviews an abstention; it never reinitializes or joins tracking.
+    @discardableResult
+    func reviewLossRun(_ index: Int) -> Task<Void, Never> {
+        guard !processing, !importing, let video, let player, let analysis = analysisResult,
+              lossRuns.indices.contains(index) else { return Task {} }
+        pause(); selectedLossRunIndex = nil; lossReviewMessage = nil
+        let sampleIndex = lossRuns[index].firstSampleIndex
+        guard analysis.timestamps.indices.contains(sampleIndex) else {
+            error = "This loss sample has no recorded presentation timestamp."
+            return Task {}
+        }
+        let timestamp = analysis.timestamps[sampleIndex]
+        guard let value = Int64(timestamp.value), timestamp.timescale > 0, timestamp.epoch == 0 else {
+            error = "This loss sample has an unsupported presentation timestamp."
+            return Task {}
+        }
+        let destination = CMTime(value: value, timescale: timestamp.timescale, flags: .valid, epoch: timestamp.epoch)
+        guard destination.seconds == analysis.trace.samples[sampleIndex].seconds,
+              destination.seconds >= start, destination.seconds <= end else {
+            error = "This loss sample does not match the selected rep."
+            return Task {}
+        }
+        lossSeekPending = true; error = nil
+        let request = playbackRequest, playerIdentity = playerGeneration, clipIdentity = generation
+        let analysisIdentity = analysis.analysisID
+        let task = Task {
+            defer {
+                if request == playbackRequest { lossSeekPending = false; lossJumpTask = nil }
+            }
+            guard !Task.isCancelled, request == playbackRequest, playerIdentity == playerGeneration,
+                  clipIdentity == generation, self.player === player, self.video?.url == video.url,
+                  analysisResult?.analysisID == analysisIdentity else { return }
+            let completed = await lossSeek(player, destination)
+            guard !Task.isCancelled, request == playbackRequest, playerIdentity == playerGeneration,
+                  clipIdentity == generation, self.player === player, self.video?.url == video.url,
+                  analysisResult?.analysisID == analysisIdentity else { return }
+            guard completed else {
+                error = "Unable to seek to this loss sample. No reviewed frame was selected."
+                return
+            }
+            let actual = player.currentTime().seconds
+            guard actual.isFinite, actual >= 0, actual <= video.duration else {
+                error = "Playback returned an unsupported time after the loss seek."
+                return
+            }
+            seconds = actual; selectedLossRunIndex = index
+            lossReviewMessage = "Loss episode \(index + 1) of \(lossRuns.count): requested observed sample at \(destination.seconds.formatted(.number.precision(.fractionLength(2)))) seconds. Verify the visible frame; navigation does not establish target identity."
+        }
+        lossJumpTask = task
+        return task
+    }
     func seek(_ value: Double) {
         guard let video, value.isFinite else { return }
-        pause(); seconds = min(video.duration, max(0, value))
+        pause(); selectedLossRunIndex = nil; lossReviewMessage = nil
+        seconds = min(video.duration, max(0, value))
         player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
     }
     func setStart() {
@@ -144,14 +223,15 @@ final class VideoModel: ObservableObject {
         } catch { self.error = "Unable to save this manual reference point." }
     }
     func clearTrace() { guard !processing else { return }; trace = nil; analysisResult = nil }
-    func analyze(mode: BarAnalysisMode) {
-        guard !processing, !importing, let video else { return }
+    @discardableResult
+    func analyze(mode: BarAnalysisMode) -> Task<Void, Never> {
+        guard !processing, !importing, let video else { return Task {} }
         let seed = trace?.samples.first { $0.kind == .manualReference && abs($0.seconds-start) <= 0.05 }?.point
-        if mode == .manual, seed == nil { error = "Seek to rep start and tap a manual reference point first."; return }
+        if mode == .manual, seed == nil { error = "Seek to rep start and tap a manual reference point first."; return Task {} }
         pause(); error = nil; processing = true; cancelling = false; processingProgress = 0; processingStatus = "Preparing upright frames"
         analysisGeneration += 1; let run = analysisGeneration, clipGeneration = generation
         let trimStart = start, trimEnd = end
-        analysisTask = Task {
+        let task = Task {
             defer { if run == analysisGeneration { processing = false; cancelling = false } }
             do {
                 let result = try await analyzer.analyze(url: video.url, start: trimStart, end: trimEnd, mode: mode, manualPoint: seed) { [weak self] update in
@@ -170,6 +250,8 @@ final class VideoModel: ObservableObject {
                 else { self.error = error.localizedDescription; processingStatus = "Processing failed; previous trace retained" }
             }
         }
+        analysisTask = task
+        return task
     }
     func cancelProcessing() {
         captureAuthorization?.invalidate()
@@ -385,6 +467,7 @@ final class VideoModel: ObservableObject {
         catch { self.error = "Removing managed copies failed: \(error.localizedDescription)" }
     }
     func removeVideo() async {
+        pause(); selectedLossRunIndex = nil; lossReviewMessage = nil
         cancelProcessing()
         generation += 1; importTask?.cancel(); importing = false
         await analysisTask?.value
@@ -398,9 +481,11 @@ final class VideoModel: ObservableObject {
         }
     }
     private func tick(_ value: Double, generation request: Int) {
-        guard request == playerGeneration, let video, value.isFinite else { return }
-        seconds = min(video.duration, max(0, value))
-        if playing && value >= end { pause() }
+        guard request == playerGeneration, !lossSeekPending, let video else { return }
+        let actual = player?.currentTime().seconds ?? value
+        guard actual.isFinite else { return }
+        seconds = min(video.duration, max(0, actual))
+        if playing && actual >= end { pause() }
     }
     private func detachPlayer() {
         pause()
@@ -409,6 +494,7 @@ final class VideoModel: ObservableObject {
         player?.replaceCurrentItem(with: nil); player = nil
     }
     deinit {
+        lossJumpTask?.cancel()
         importTask?.cancel()
         analysisTask?.cancel()
         captureAuthorization?.invalidate(); captureTask?.cancel()

@@ -89,6 +89,13 @@ public struct VideoTraceSample: Codable, Sendable {
     }
 }
 
+/// Consecutive explicit no-target samples; not inferred continuous time intervals.
+public struct VideoLossRun: Equatable, Sendable {
+    public let firstSampleIndex: Int
+    public let lastSampleIndex: Int
+    public var frameCount: Int { lastSampleIndex - firstSampleIndex + 1 }
+}
+
 public struct VideoTrace: Codable, Sendable {
     public let start: Double
     public let end: Double
@@ -104,6 +111,19 @@ public struct VideoTrace: Codable, Sendable {
             previous = sample.seconds
         }
         self.start = start; self.end = end; self.samples = samples
+    }
+    public var lossRuns: [VideoLossRun] {
+        var runs: [VideoLossRun] = [], first: Int?
+        for (index, sample) in samples.enumerated() {
+            if sample.kind == .lost {
+                if first == nil { first = index }
+            } else if let beginning = first {
+                runs.append(VideoLossRun(firstSampleIndex: beginning, lastSampleIndex: index - 1))
+                first = nil
+            }
+        }
+        if let first { runs.append(VideoLossRun(firstSampleIndex: first, lastSampleIndex: samples.count - 1)) }
+        return runs
     }
     public func segments(through seconds: Double, minimumConfidence: Double = 0.5,
                          maximumGap: Double = 0.2) -> [[VideoPoint]] {
