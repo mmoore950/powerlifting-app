@@ -16,6 +16,75 @@ final class BarFrameBundleExporterTests: XCTestCase {
         try await checkGeneratedCapture(width: 1280, height: 720, rotated: false)
     }
 
+    func testGeneratedTwoWindowAbsolutePTSOverlap() async throws {
+        let root = try temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let media = root.appendingPathComponent("generated.mov")
+        try await SyntheticMovieWriter.write(to: media, width: 128, height: 96, frameCount: 15,
+            timescale: 30, rotated: true, asymmetric: true)
+        let sourceHash = digest(try Data(contentsOf: media)), analyzer = BarAnalysisService()
+        let windows: [(String, Double, Double, [Int64])] = [
+            ("a", 0.1, 0.3, [3, 5, 7, 9]), ("b", 1.0 / 6.0, 0.4, [5, 7, 9, 11, 12])
+        ]
+        var results: [BarAnalysisResult] = [], ledgers: [[String: Any]] = []
+        var shared: [Int64: (BarFrameTime, Data)] = [:], sharedCount = 0
+        var files: [(String, URL, String)] = [("native-two-window-source", media, "com.apple.quicktime-movie")]
+        for (name, start, end, expected) in windows {
+            let destination = root.appendingPathComponent(name, isDirectory: true)
+            let exporter = try BarFrameBundleExporter(mediaURL: media,
+                context: context(media: media, clipID: "generated-native-window-" + name,
+                    modelID: "generated-two-window-capture-test", sourceGroup: "generated-native-two-window-fixture"),
+                destination: destination)
+            let sink = try await exporter.prepare()
+            let result = try await analyzer.analyze(url: media, start: start, end: end,
+                mode: .automatic, manualPoint: nil, capture: sink) { _ in }
+            let output = try await exporter.finish(result: result)
+            XCTAssertEqual(output, destination)
+            XCTAssertEqual(result.captureSessionID, sink.sessionID)
+            XCTAssertEqual(result.uprightWidth, 96); XCTAssertEqual(result.uprightHeight, 128)
+            XCTAssertEqual(result.timestamps.count, expected.count)
+            XCTAssertTrue((1...6).contains(result.timestamps.count))
+            // Unexpected decoder output fails this fixture; no inferred/rewritten PTS.
+            guard result.timestamps.count == expected.count else { throw BarFrameBundleError.timestamp }
+            let frames = try await validateCapture(media: media, destination: destination, result: result)
+            let ledger = try object(destination.appendingPathComponent("ledger.json"))
+            let clip = try XCTUnwrap(ledger["clip"] as? [String: Any])
+            XCTAssertEqual(clip["sha256"] as? String, sourceHash)
+            XCTAssertEqual(clip["id"] as? String, "generated-native-window-" + name)
+            for index in frames.indices {
+                let time = result.timestamps[index], value = try XCTUnwrap(Int64(time.value))
+                let actual = CMTime(value: value, timescale: time.timescale)
+                XCTAssertEqual(time.epoch, 0)
+                XCTAssertEqual(CMTimeCompare(actual, CMTime(value: expected[index], timescale: 30)), 0)
+                XCTAssertGreaterThan(value, 0)
+                let filename = try XCTUnwrap(frames[index]["filename"] as? String)
+                let file = destination.appendingPathComponent("frames").appendingPathComponent(filename)
+                let png = try Data(contentsOf: file)
+                if let previous = shared[expected[index]] {
+                    XCTAssertEqual(time.value, previous.0.value)
+                    XCTAssertEqual(time.timescale, previous.0.timescale)
+                    XCTAssertEqual(time.epoch, previous.0.epoch)
+                    XCTAssertEqual(png, previous.1, "Shared actual frame bytes differ")
+                    sharedCount += 1
+                } else { shared[expected[index]] = (time, png) }
+                files.append(("native-two-window-" + name + "-" + (filename as NSString).deletingPathExtension, file, "public.png"))
+            }
+            for kind in ["ledger", "prediction", "bundle"] {
+                files.append(("native-two-window-" + name + "-" + kind,
+                    destination.appendingPathComponent(kind + ".json"), "public.json"))
+            }
+            results.append(result); ledgers.append(ledger)
+        }
+        XCTAssertEqual(sharedCount, 3); XCTAssertEqual(shared.count, 6)
+        XCTAssertNotEqual(results[0].analysisID, results[1].analysisID)
+        XCTAssertNotEqual(results[0].captureSessionID, results[1].captureSessionID)
+        XCTAssertEqual(try XCTUnwrap(ledgers[0]["decoder"] as? [String: String]),
+                       try XCTUnwrap(ledgers[1]["decoder"] as? [String: String]))
+        XCTAssertEqual(digest(try Data(contentsOf: media)), sourceHash)
+        // Temporal detector state resets: never equate predictions or track IDs.
+        try preserveAttachments(files)
+    }
+
     func testWriterRejectsIdentityMutationRevocationAndBudgetsWithoutCompletion() async throws {
         let root = try temporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -132,13 +201,20 @@ final class BarFrameBundleExporterTests: XCTestCase {
         XCTAssertLessThanOrEqual(result.uprightWidth, 1024); XCTAssertLessThanOrEqual(result.uprightHeight, 1024)
         if rotated { XCTAssertEqual(result.uprightWidth, height); XCTAssertEqual(result.uprightHeight, width) }
         else { XCTAssertLessThan(result.uprightWidth, width); XCTAssertGreaterThan(result.uprightWidth, result.uprightHeight) }
+        let frames = try await validateCapture(media: media, destination: destination, result: result, plain: plain)
+        if rotated { try preserveGeneratedAttachments(media: media, destination: destination, frames: frames) }
+    }
+
+    /// Same byte, association and independently decoded raster oracle for both routes.
+    private func validateCapture(media: URL, destination: URL, result: BarAnalysisResult,
+                                 plain: BarAnalysisResult? = nil) async throws -> [[String: Any]] {
         let ledger = try object(destination.appendingPathComponent("ledger.json"))
         XCTAssertEqual(ledger["purpose"] as? String, "native-analysis")
         XCTAssertEqual(ledger["nativeParityVerified"] as? Bool, true)
         let frames = try XCTUnwrap(ledger["frames"] as? [[String: Any]])
         let association = try XCTUnwrap(ledger["association"] as? [String: Any])
         XCTAssertEqual(association["analysisID"] as? String, result.analysisID.uuidString)
-        XCTAssertEqual(association["captureSessionID"] as? String, sink.sessionID.uuidString)
+        XCTAssertEqual(association["captureSessionID"] as? String, result.captureSessionID?.uuidString)
         let predictionBytes = try Data(contentsOf: destination.appendingPathComponent("prediction.json"))
         XCTAssertEqual(association["predictionSHA256"] as? String, digest(predictionBytes))
         let predictions = try object(destination.appendingPathComponent("prediction.json"))
@@ -150,6 +226,9 @@ final class BarFrameBundleExporterTests: XCTestCase {
         let ledgerText = try XCTUnwrap(bundle["ledgerText"] as? String)
         XCTAssertEqual(Data(ledgerText.utf8), try Data(contentsOf: destination.appendingPathComponent("ledger.json")))
         XCTAssertEqual(bundle["ledgerSha256"] as? String, digest(Data(ledgerText.utf8)))
+        let embeddedLedger = try XCTUnwrap(bundle["ledger"] as? [String: Any])
+        XCTAssertEqual(try JSONSerialization.data(withJSONObject: embeddedLedger, options: .sortedKeys),
+                       try JSONSerialization.data(withJSONObject: ledger, options: .sortedKeys))
         XCTAssertEqual(frames.count, result.timestamps.count); XCTAssertEqual(samples.count, frames.count)
         let oracle = AVAssetImageGenerator(asset: AVURLAsset(url: media))
         oracle.appliesPreferredTrackTransform = true; oracle.apertureMode = .cleanAperture
@@ -158,8 +237,11 @@ final class BarFrameBundleExporterTests: XCTestCase {
         defer { oracle.cancelAllCGImageGeneration() }
         for index in frames.indices {
             let timestamp = result.timestamps[index]
-            XCTAssertEqual(timestamp.value, plain.timestamps[index].value)
-            XCTAssertEqual(timestamp.timescale, plain.timestamps[index].timescale)
+            if let plain {
+                XCTAssertEqual(timestamp.value, plain.timestamps[index].value)
+                XCTAssertEqual(timestamp.timescale, plain.timestamps[index].timescale)
+                XCTAssertEqual(timestamp.epoch, plain.timestamps[index].epoch)
+            }
             for dictionary in [frames[index], samples[index]] {
                 let time = try XCTUnwrap(dictionary["timestamp"] as? [String: Any])
                 XCTAssertEqual(time["value"] as? String, timestamp.value)
@@ -178,6 +260,8 @@ final class BarFrameBundleExporterTests: XCTestCase {
             let actual = try await oracle.image(at: CMTime(value: try XCTUnwrap(Int64(timestamp.value)), timescale: timestamp.timescale))
             XCTAssertEqual(actual.actualTime.value, try XCTUnwrap(Int64(timestamp.value)))
             XCTAssertEqual(actual.actualTime.timescale, timestamp.timescale)
+            XCTAssertEqual(actual.actualTime.epoch, timestamp.epoch)
+            XCTAssertEqual(image.width, result.uprightWidth); XCTAssertEqual(image.height, result.uprightHeight)
             XCTAssertEqual(image.width, actual.image.width); XCTAssertEqual(image.height, actual.image.height)
             let pixels = try raster(image), expected = try raster(actual.image)
             XCTAssertEqual(pixels.count, expected.count)
@@ -190,7 +274,7 @@ final class BarFrameBundleExporterTests: XCTestCase {
             }
             XCTAssertGreaterThan(maximumRGB-minimumRGB, 50, "Asymmetric fixture lost RGB contrast")
         }
-        if rotated { try preserveGeneratedAttachments(media: media, destination: destination, frames: frames) }
+        return frames
     }
 
     /// One tiny generated rotated fixture only; never a user/imported real clip.
@@ -206,9 +290,13 @@ final class BarFrameBundleExporterTests: XCTestCase {
             let filename = try XCTUnwrap(frame["filename"] as? String)
             files.append(("native-generated-" + (filename as NSString).deletingPathExtension, destination.appendingPathComponent("frames").appendingPathComponent(filename), "public.png"))
         }
+        try preserveAttachments(files)
+    }
+
+    private func preserveAttachments(_ files: [(String, URL, String)]) throws {
         guard files.count <= 20 else { throw BarFrameBundleError.budget }
         var total = 0, snapshots: [(String, Data, String)] = []
-        // The configured fixture is128x96/6frames, not the wider cap test or private media.
+        // Only the tiny generated fixtures call this transport, never private media.
         for (name, url, type) in files {
             let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize
             guard let size, size > 0, size <= 1024 * 1024 else { throw BarFrameBundleError.budget }
@@ -225,11 +313,12 @@ final class BarFrameBundleExporterTests: XCTestCase {
         }
     }
 
-    private func context(media: URL) throws -> BarFrameBundleContext {
+    private func context(media: URL, clipID: String = "generated-native-only",
+                         modelID: String = "generated-capture-test", sourceGroup: String = "generated-native-fixture") throws -> BarFrameBundleContext {
         let hash = digest(try Data(contentsOf: media))
-        return BarFrameBundleContext(prediction: BarPredictionContext(clipID: "generated-native-only", expectedSHA256: hash,
-            modelID: "generated-capture-test", synthetic: true), assetRoot: media.deletingLastPathComponent(),
-            localPath: media.lastPathComponent, sourceGroup: "generated-native-fixture", split: "development",
+        return BarFrameBundleContext(prediction: BarPredictionContext(clipID: clipID, expectedSHA256: hash,
+            modelID: modelID, synthetic: true), assetRoot: media.deletingLastPathComponent(),
+            localPath: media.lastPathComponent, sourceGroup: sourceGroup, split: "development",
             permissionEvidence: "Generated synthetic test only", lift: "synthetic", targetID: "near-side-hub")
     }
     private func temporaryRoot() throws -> URL {

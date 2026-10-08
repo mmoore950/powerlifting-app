@@ -1,5 +1,70 @@
 # Worker status
 
+## Run17 diagnosed; two-window source ready for review — October 8, 2026, 07:00 ET
+
+- Run37764499138 at reviewed47b406b completed failure. Actual downloaded198365-
+  byte diagnostic ZIP digest matched metadata;229 bounded safe entries retained.
+  Full evidence: native-run17-evidence.md.11POSIX/24orchestration checks passed;
+  macOS42pass1skip plus independent actualHTTP1pass. Build0/shared376.179s:
+  compile72.272s, boot5.403s, bootstatus242.637s, readiness31.589s/exactBooted.
+- UI0/380.280s, one smoke method passed. Non-UI remaining178.434s/child158.434s
+  timed out124/162.339s after42iOS core passes; no app-host method start/pass.
+  CoreSimulator405/installApplication/Mach-308 log near termination cannot prove
+  cause/order. Unit TERM/child-15/directwait/groupabsence/cleanuptrue; outer
+  receipt verified/no observation timeout. Owned simulator deleted/absence
+  verified. Both exports skipped: no successful manifest or native reconstruction.
+- Approved two-window source implemented: one extra XCTest, original nonzero
+  PTS/shared bytes/distinct identities, shared existing independent raster and
+  association/bundle checks; original route retained. Attachment20/1MiB/2MiB
+  bounds unchanged. Explicit mapping/snapshot contract requires observed exact
+  manifest strings; no guessed name parser or automatic disk extractor.
+- ACTUAL final27Node methods passed/no skips in4.049s; four new methods include
+  both strict evaluators and existing aggregate on explicitly synthetic header/
+  non-movie bytes:9raw/6unique/3shared/0reviewed/0observed/6unreviewed, no baseline
+  conflicts, accuracyfalse/scalarMetricsnull/continuityunverified/groupsunknown.
+  Source inventory63; new Swift test uncompiled/unrun here and absent fromrun17.
+  Whitespace passed. See generated-two-window-native-contract.md for handoff.
+- Source checkpoint complete before provisional20–35min estimate/noharddeadline.
+  Next leader-requested scope: same verified warm owned simulator for sequential
+  UI/non-UI, contamination/provenance/bounds assessment only,5–10min provisional
+  with no hard deadline. Then generated local annotation walkthrough. No push/
+  newCI. Native readiness lacks reliable ETA until reviewed experiment/run;
+  private-browser/provider/device/realaccuracy/release gates remain separate.
+
+## Run17 build passed; two-window source active — October 8, 2026, 06:52 ET
+
+- Actual jobs API: run37764499138/job113268703648 at reviewed47b406b has
+  passed setup/core/HTTP/prepare and unsigned build-for-testing. Isolated UI then
+  non-UI tests are in progress; both exports and owned cleanup remain pending.
+  Tested inventory is62, not the future63-method source now being implemented.
+- Leader approved f5597be two-window implementation at Medium. The new test
+  reuses the existing raster/association/bundle byte checks and tiny generated
+  writer; source work remains unexecuted on Apple. Original single-window route
+  retained. Explicit observed manifest mapping/actual extraction remain gated.
+- Next process verdict bounded by560s shared tests/10min step, then export and
+  cleanup; job30min hard limit unchanged. Remaining ETA is uncertain without
+  test start time. Source handoff estimate20–35min from06:50 recovery, provisional
+  with no hard delivery deadline. These estimates do not establish native,
+  provider, private-browser, real accuracy or release readiness. No push/newCI.
+
+## Run17 diagnostic execution active — October 8, 2026, 06:40 ET
+
+- Leader reviewed/pushed exact47b406b8300e33cb33533fc8c4e176d91c610076 and
+  queued run37764499138 at06:35ET. Actual06:39ET jobs snapshot: setup/core/
+  HTTP/prepare passed, build inprogress;62 iOS tests/both exports/owned cleanup
+  still pending. Current local f5597be is scope docs only and is not the tested
+  revision. No new run authorized by that scope.
+- Meaningful native result forecast15–22min after runner start, provisional with
+  queue/coldboot/scheduling uncertainty; nominal compile320s under440s shared
+  build, outer prepare2/build8/test10/job30 minutes unchanged. No guaranteed
+  iOS/provider/transport/accuracy readiness date follows this process forecast.
+  On failure inspect actual periodic/outer/cleanup receipts before source repair;
+  on success verify exact inventory/both exports and actual generated-only wrapper.
+- Source queue: two-window scope f5597be complete, implementation awaits leader
+  decision (20–35min source estimate if approved/noharddeadline). No reliable
+  review-duration estimate; next estimate when review arrives. Continue authorized
+  run17 evidence work rather than ending on a source checkpoint.
+
 ## Tiny generated two-window native proof scoped — October 8, 2026, 06:39 ET
 
 - Scope only in generated-two-window-native-scope.md: reuse existing rotated
