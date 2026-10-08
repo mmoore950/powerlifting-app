@@ -65,10 +65,14 @@ process, not live xcodebuild/descendant/service totals; missing updates indicate
 only absence of observer progress, not a demonstrated OS/Swift stall cause.
 Windows does not provide the POSIX RSS observation. These deadlines do not guarantee OS scheduling or
 termination of an uninterruptible process. No retry or timeout expansion was added.
-The existing setup phase runs nine focused synthetic supervisor methods, including
+The setup phase runs eleven focused synthetic supervisor methods, retaining the
+original nine and adding persistent/final diagnostic-write failure checks, including
 POSIX TERM/KILL, SIGINT/SIGTERM cancellation, child/grandchild cleanup and unrelated
 process preservation and descendants remaining after a normal parent exit.
-Windows runs only four direct-child checks and skips the five POSIX methods.
+Windows runs six checks and skips the five POSIX-specific methods. Its persistent
+write-failure case proves actual direct-child termination/wait, not POSIX escalation.
+On POSIX that same case uses a TERM-ignoring child and requires actual TERM→KILL,
+group absence and direct-child wait despite repeated persistence faults.
 Source/local success is separate from macOS/Xcode execution.
 Supervisor test receipts/stdout/stderr are retained as unique top-level diagnostic
 files, with separate SIGTERM/SIGINT suffixes. Error receipts include the actual
@@ -117,6 +121,13 @@ it is not a demonstrated correction of the unknown host stall cause.
 
 Diagnostic write failure after supervisor launch continues owned observation/
 cancellation/reap and then fails125; it must not abandon the running process.
+Supervisor persistence errors after command launch also remain bounded in-memory
+diagnostic metadata and cannot interrupt poll/signal/TERM→KILL/wait/group checks.
+A prelaunch write can refuse the command. Final persistence failure returns125
+and leaves actual cleanup/child outcome intact; an older receipt never proves
+completion. The final stdout line reports persistence failure without claiming
+that a receipt was saved. Persistent/final I/O fault injection executes generated
+children only. New POSIX escalation evidence awaits the reviewed Apple-host run.
 
 Twenty-four orchestration tests include shared budget/cancellation/failure,
 inventory omission/duplicate/skip guards, injected simulator identities and a real

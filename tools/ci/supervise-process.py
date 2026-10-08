@@ -72,7 +72,7 @@ def main():
         "escapedProcessesAndOSServicesOwned": False, "progressSequence": 0,
     }
 
-    def save():
+    def save(*, final=False):
         nonlocal next_progress
         now = time.monotonic()
         evidence.update(elapsedSeconds=round(now-started, 3), observedMonotonic=now,
@@ -80,7 +80,15 @@ def main():
                         resources=process_observations(), progressSequence=evidence["progressSequence"]+1,
                         childReturnCode=child.returncode if child is not None else None)
         next_progress = now + PROGRESS_INTERVAL
-        save_json(args.receipt, evidence, maximum_bytes=1024*1024)
+        try:
+            save_json(args.receipt, evidence, maximum_bytes=1024*1024)
+        except (OSError, ValueError) as error:
+            evidence.update(diagnosticPersistenceFailed=True,
+                            diagnosticPersistenceError=f"{type(error).__name__}: {error}"[:256])
+            # Diagnostics cannot interrupt owned lifetime operations after launch.
+            # The first prelaunch write may refuse; a final write never masks exit.
+            if child is None and not final:
+                raise
 
     def progress(operation):
         evidence["operation"] = operation
@@ -198,14 +206,21 @@ def main():
                                 cleanupErrorTraceback=traceback.format_exc())
         exit_code = 125
     finally:
+        if evidence.get("diagnosticPersistenceFailed"):
+            exit_code = 125
         evidence.update(state="finished", wrapperExitCode=exit_code)
         try:
-            save()
+            save(final=True)
+            if evidence.get("diagnosticPersistenceFailed"):
+                exit_code = 125
+                evidence["wrapperExitCode"] = exit_code
         finally:
             for signum, previous in handlers.items():
                 signal.signal(signum, previous)
     print(f"Supervisor: {evidence.get('reason')}; exit={exit_code}; "
-          f"cleanup={evidence.get('cleanupComplete')}; receipt={args.receipt}", flush=True)
+          f"cleanup={evidence.get('cleanupComplete')}; "
+          f"diagnosticPersistenceFailed={evidence.get('diagnosticPersistenceFailed', False)}; "
+          f"receipt={args.receipt}", flush=True)
     return exit_code
 
 

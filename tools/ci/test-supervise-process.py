@@ -10,6 +10,8 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import redirect_stdout
+import io
 from unittest.mock import patch
 
 SUPERVISOR = Path(__file__).with_name("supervise-process.py")
@@ -69,6 +71,64 @@ class SupervisorTests(unittest.TestCase):
         result, receipt = self.run_child("raise SystemExit(7)")
         self.assertEqual(result.returncode, 7)
         self.assertEqual(receipt["childReturnCode"], 7)
+
+    def test_persistent_diagnostic_failure_does_not_interrupt_escalation_and_reap(self):
+        spec = importlib.util.spec_from_file_location('supervisor_write_failure', SUPERVISOR)
+        module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+        ready = self.root/'term-ignore-ready'
+        source = ("import signal,time,pathlib;signal.signal(signal.SIGTERM,signal.SIG_IGN);"
+                  f"pathlib.Path({str(ready)!r}).write_text('ready');time.sleep(30)")
+        snapshots = []; children = []; waits = []; original_save = module.save_json
+        original_popen = subprocess.Popen
+        def popen(*args, **kwargs):
+            child = original_popen(*args, **kwargs); children.append(child); original_wait=child.wait
+            def wait(*args, **kwargs): waits.append(True); return original_wait(*args, **kwargs)
+            child.wait=wait;return child
+        def fail(path, evidence, **kwargs):
+            if evidence.get('childPID') is not None:
+                snapshots.append(json.loads(json.dumps(evidence)))
+                raise OSError('Persistent generated diagnostic write failure')
+            return original_save(path,evidence,**kwargs)
+        output=io.StringIO();handlers={s:signal.getsignal(s) for s in [signal.SIGINT,signal.SIGTERM]}
+        try:
+            with patch.object(module,'save_json',side_effect=fail), patch.object(module,'PROGRESS_INTERVAL',.05), \
+                    patch.object(module.subprocess,'Popen',side_effect=popen), \
+                    patch.object(sys,'argv',self.command(source,.7)[1:]), redirect_stdout(output):
+                code=module.main()
+            self.assertEqual(code,125);self.assertTrue(ready.exists());self.assertEqual(len(children),1);self.assertTrue(waits)
+            self.assertIsNotNone(children[0].returncode);self.assertGreater(len(snapshots),3)
+            final=snapshots[-1];self.assertEqual(final['state'],'finished');self.assertTrue(final['directChildWaitCompleted'])
+            self.assertTrue(final['cleanupComplete']);self.assertTrue(final['diagnosticPersistenceFailed'])
+            self.assertEqual(final['wrapperExitCode'],125);self.assertLessEqual(len(final['diagnosticPersistenceError']),256)
+            if os.name=='posix':
+                self.assertEqual(final['signalsSent'],['SIGTERM','SIGKILL']);self.assertTrue(final['ownedGroupAbsent'])
+                self.assertEqual(children[0].returncode,-signal.SIGKILL)
+            else:
+                self.assertEqual(final['signalsSent'],['SIGTERM']);self.assertEqual(final['ownership'],'direct-child-only')
+                self.assertIsNone(final['ownedGroupAbsent'])
+            self.assertIn('diagnosticPersistenceFailed=True',output.getvalue())
+            for signum,handler in handlers.items():self.assertEqual(signal.getsignal(signum),handler)
+            (self.root/'observed-failure-final.json').write_text(json.dumps(final,indent=2))
+            directory=os.environ.get('SUPERVISOR_TEST_EVIDENCE_DIR')
+            if directory:(Path(directory)/'supervisor-persistent-write-failure-observed.json').write_text(json.dumps(final,indent=2))
+        finally:
+            for child in children:
+                if child.poll() is None:child.kill();child.wait(timeout=2)
+
+    def test_final_diagnostic_write_failure_retains_completed_cleanup_and_exit125(self):
+        spec=importlib.util.spec_from_file_location('supervisor_final_failure',SUPERVISOR)
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        original=module.save_json;finals=[];output=io.StringIO()
+        def save(path,evidence,**kwargs):
+            if evidence['state']=='finished':
+                finals.append(evidence);raise OSError('Generated final write failure')
+            return original(path,evidence,**kwargs)
+        with patch.object(module,'save_json',side_effect=save),patch.object(sys,'argv',self.command('pass')[1:]),redirect_stdout(output):
+            self.assertEqual(module.main(),125)
+        self.assertEqual(len(finals),1);final=finals[0]
+        self.assertTrue(final['directChildWaitCompleted']);self.assertTrue(final['cleanupComplete'])
+        self.assertEqual(final['childReturnCode'],0);self.assertEqual(final['wrapperExitCode'],125)
+        self.assertTrue(final['diagnosticPersistenceFailed']);self.assertIn('exit=125',output.getvalue())
 
     def test_timeout(self):
         # Deterministic uncertainty checks supplement the real subprocess check;

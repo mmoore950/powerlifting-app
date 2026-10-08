@@ -1,5 +1,29 @@
 # Worker status
 
+## Persistent supervisor diagnostic failure correction — October 8, 2026, 06:35 ET
+
+- Leader review of3b364a8 identified that supervisor progress persistence could
+  still throw during owned cleanup. Fixed afterlaunch save failures to record
+  bounded in-memory error metadata/exit125 while continuing actual poll, signaling,
+  TERM→KILL escalation, direct-child wait and group observation. Prelaunch write
+  may refuse; final save failure cannot replace cleanup/child outcome with an
+  uncaught exception. Stale/absent receipt remains unverified, never a false pass.
+- ACTUAL Windows11supervisor methods6pass/5POSIXskip in1.766s: persistent write
+  failures across polling/final save with actual generated TERM-ignoring child
+  (Windows terminate/reap directchild only), and final-write failure after actual
+  successful child preserves cleanuptrue/child0 but returns125. Captured failure
+  metadata retained locally. POSIX same regression requires actual TERM→KILL/
+  directwait/groupabsence on the Apple runner; not executed here. A temporary
+  test sys.argv construction error was fixed before these final results.
+- ACTUAL final orchestration24methods23pass/1POSIXskip in8.974s confirms changed
+  supervisor output/periodic receipts still integrate with native orchestration.
+  Whitespace passed. Correctness source handoff is within10–20min provisional
+  estimate/noharddeadline; issue resolved without a newCI/push.
+  Next queued two-window scope resumes immediately after handoff,5–10min estimate/
+  noharddeadline. Build440/prepare2/build8/test10/job30 unchanged; native and real
+  accuracy/provider gates remain unknown. No running-turn model-change claim;
+  routine follow-up remains Medium after this named lifetime issue.
+
 ## Run16 diagnostic source and sequential boot experiment — October 8, 2026, 06:28 ET
 
 - Existing supervisor process receipts now have periodic atomic5s updates with
