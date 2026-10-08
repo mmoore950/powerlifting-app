@@ -15,14 +15,15 @@ spec.loader.exec_module(phases_module)
 
 def execute_build(selected, owned_file, derived, output, cancellation, *, clock=time.monotonic, runner=run_supervised):
     owned = verified_record(owned_file, selected)
-    if owned.get("bootRequested") is not True or owned.get("bootVerified") is not False:
-        raise ValueError("Fresh owned simulator needs a completed boot request, not a reused ready record")
+    if owned.get("bootRequested") is not False or owned.get("bootVerified") is not False or owned.get("state") != "created":
+        raise ValueError("Fresh owned simulator must be created, unbooted and not reused")
     plan = [
         ("build-compile", ["xcodebuild", "-project", "PowerliftingApp.xcodeproj", "-scheme", "PowerliftingApp",
                            "-destination", f"platform=iOS Simulator,id={selected['udid']}", "-destination-timeout", "60",
                            "-derivedDataPath", str(derived), "-resultBundlePath", str(output / "build.xcresult"),
                            "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",
                            "CODE_SIGNING_ALLOWED=NO", "build-for-testing"]),
+        ("ui-build-boot", ["xcrun", "simctl", "boot", owned["udid"]]),
         ("ui-build-bootstatus", ["xcrun", "simctl", "bootstatus", owned["udid"], "-b"]),
         ("ui-build-ready", ["xcrun", "simctl", "list", "--json"]),
     ]
@@ -37,10 +38,24 @@ def execute_build(selected, owned_file, derived, output, cancellation, *, clock=
             raise ValueError("Fresh inventory has no matching available Booted UI simulator")
         return {"udid": owned["udid"], "identityMatched": True, "bootedObserved": True}
 
-    # Future reservation: 20s minimum bootstatus work + its20s cleanup + final
-    # inventory10s work + its20s cleanup. Bootstatus preserves that final30s.
-    code = phases_module.execute(plan, output, cancellation, budget=440, clock=clock, runner=runner,
-        reserves={"build-compile": 70, "ui-build-bootstatus": 30}, receipt_name="build-phases.json",
+    def ordered_runner(command, timeout, prefix, cancel):
+        if prefix.name != "build-compile" and verified_record(owned_file, selected) != owned:
+            raise ValueError("Owned simulator record changed before device action")
+        effective_timeout = min(10, timeout) if prefix.name == "ui-build-boot" else timeout
+        result = runner(command, effective_timeout, prefix, cancel)
+        result["effectiveTimeoutSeconds"] = effective_timeout
+        if prefix.name == "ui-build-boot" and result["exitCode"] == 0 and cancel.signum is None:
+            if verified_record(owned_file, selected) != owned:
+                raise ValueError("Owned simulator record changed during boot request")
+            owned.update(bootRequested=True, state="boot-requested")
+            save_json(owned_file, owned)
+        return result
+
+    # Future reservation: boot10s+cleanup20s, bootstatus20s+cleanup20s,
+    # final inventory10s+cleanup20s. Compile nominally gets320s, not350s.
+    # Boot caps work at10s and preserves70s; bootstatus preserves final30s.
+    code = phases_module.execute(plan, output, cancellation, budget=440, clock=clock, runner=ordered_runner,
+        reserves={"build-compile": 100, "ui-build-boot": 70, "ui-build-bootstatus": 30}, receipt_name="build-phases.json",
         validator=validate_ready, validation_key="uiReadiness")
     if code == 0 and cancellation.signum is None:
         owned.update(bootVerified=True, state="ready")

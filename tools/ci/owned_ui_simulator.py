@@ -1,4 +1,4 @@
-"""Create/boot and later clean only a recorded fresh simulator for this run."""
+"""Create/validate and later clean only a recorded fresh simulator for this run."""
 import argparse
 import json
 import os
@@ -128,14 +128,11 @@ def operation(mode, output, selected, inventory, cancellation, *, clock=time.mon
             save_json(owned_file, record)
             after = identities(log_json(command("ui-after-create", ["xcrun", "simctl", "list", "--json"])))
             created_runtime, created_device = after[record["udid"]]
-            if not same_device(record, created_runtime, created_device) or created_device.get("isAvailable") is not True:
+            if (not same_device(record, created_runtime, created_device) or created_device.get("isAvailable") is not True
+                    or created_device.get("state") != "Shutdown"):
                 raise ValueError("Created simulator inventory does not match this run")
-            record.update(createdValidated=True, state="booting")
-            save_json(owned_file, record)
-            command("ui-boot", ["xcrun", "simctl", "boot", record["udid"]], maximum=10)
-            # Cold boot proceeds while the following build compiles. Build's one
-            # shared deadline still requires bootstatus AND fresh Booted evidence.
-            record.update(bootRequested=True, state="boot-requested")
+            # The build phase must compile before it requests fresh boot.
+            record.update(createdValidated=True, state="created")
             save_json(owned_file, record)
             print(json.dumps({k: record[k] for k in ("udid", "name", "runtime", "bootVerified")}))
         else:

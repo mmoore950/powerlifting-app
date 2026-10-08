@@ -1,5 +1,41 @@
 # Worker status
 
+## Run16 diagnostic source and sequential boot experiment — October 8, 2026, 06:28 ET
+
+- Existing supervisor process receipts now have periodic atomic5s updates with
+  operation, monotonic elapsed/deadline/remaining, last actual child poll and cheap
+  self CPU/peak RSS (POSIX only). Bounded1MiB overwritten receipt; separate outer
+  observer8KiB overwritten receipt tracks supervisor poll/cancellation/deadline.
+  No diagnostic subprocess polling loops or tree/service resource claim. Timing
+  remains cooperative; scheduling/file-I/O stalls can prevent receipt updates.
+- Prepare now creates/validates available matching Shutdown simulator only,
+  bootRequestedfalse/bootVerifiedfalse. Shared440s build compiles original
+  destination first, then fresh boot capped10s, bootstatus and exact matching
+  Booted inventory. Compile future reserve100s (boot10+cleanup20, bootstatus20+
+  cleanup20, inventory10+cleanup20), nominal compile320s; boot reserves70s and
+  bootstatus30s, each command also20s cleanup. Record rechecked before device
+  actions; boot success records requested only, verified readiness requires all
+  success. Failed/cancelled/exhausted/reused/changed record refuses later work.
+- Sequential fresh boot is an explicitly unproven contention experiment, separate
+  from diagnostic instrumentation; run16 cause/owned cleanup remain unknown.
+  Existing prepare2/build8/test10/job30 unchanged; no retry/globalkill/reset or
+  readiness bypass. No push/newCI before leader review. Both result/export gates
+  and all62 current iOS methods remain required.
+- ACTUAL Windows final24orchestration methods23pass/1POSIXskip in8.956s; actual8s
+  local child demonstrated periodic running supervisor/outer updates retained
+  in a bounded live-pair fixture, then completed receipts. Diagnostic write failure
+  after launch preserves owned observation/reap and fails125; regression executed
+  an actual child to completion with injected progress I/O failure. Existing
+  nine supervisor methods4pass/5POSIXskips in0.890s; simctl/Xcode is injected/unrun
+  here. Whitespace passed. Earlier one test-placement error was repaired (stdout
+  assertion returned to its original test); it was not a product process error.
+- This source checkpoint is earlier than provisional20–35min estimate after
+  cumulative handoff. Next task already approved: tiny generated two-window native
+  fixture/attachment/evaluator/aggregate SCOPE,5–10min provisional/no hard source
+  deadline. Native result/readiness cannot be estimated until review/authorized
+  run; prior15–22min forecast did not establish acceptance. Realreferenceszero/
+  accuracyunmeasured/private/provider gates unchanged.
+
 ## Run16 failure reconciled and transitive partition fix — October 8, 2026, 06:23 ET
 
 - Actual final run37759725854/job113252936665 at f000132 failed build125 and

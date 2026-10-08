@@ -10,6 +10,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+import ci_process
 
 from ci_process import Cancellation, run_supervised, save_json
 from owned_ui_simulator import operation, verified_record
@@ -113,6 +114,69 @@ class NativeOrchestrationTests(unittest.TestCase):
         self.assertEqual(result["exitCode"], 7)
         self.assertTrue(result["supervisor"]["cleanupComplete"])
         self.assertIn("owned-child-output", (self.root / "real.log").read_text())
+
+    def test_actual_periodic_atomic_receipts_preserve_live_progress_then_final_result(self):
+        script = ("import sys; from pathlib import Path; from ci_process import Cancellation,run_supervised; "
+                  f"result=run_supervised([sys.executable,'-c','import time; time.sleep(8)'],12,Path({str(self.root / 'progress')!r}),Cancellation()); "
+                  "raise SystemExit(result['exitCode'])")
+        parent = subprocess.Popen([sys.executable, "-c", script], cwd=Path(__file__).parent, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        samples = None
+        try:
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline and parent.poll() is None:
+                try:
+                    outer = json.loads((self.root / "progress.outer.json").read_text())
+                    supervisor = json.loads((self.root / "progress.process.json").read_text())
+                    if (outer["state"] == supervisor["state"] == "running"
+                            and outer["elapsedSeconds"] >= 5 and supervisor["elapsedSeconds"] >= 5):
+                        samples = [outer, supervisor]; break
+                except (OSError, json.JSONDecodeError):
+                    pass
+                time.sleep(.05)
+            self.assertIsNotNone(samples, "No actual periodic live receipt pair was observed")
+            save_json(self.root / "progress-live.json", {"outer":samples[0],"supervisor":samples[1]},maximum_bytes=2*1024*1024)
+            for sample in samples:
+                self.assertGreaterEqual(sample["progressSequence"], 3)
+                self.assertGreaterEqual(sample["resources"]["processCPUSeconds"], 0)
+                self.assertIn("self-process-only", sample["resources"]["scope"])
+                self.assertAlmostEqual(sample["deadlineMonotonic"]-sample["observedMonotonic"], sample["remainingSeconds"], places=5)
+                self.assertEqual(sample["operation"], "poll-supervisor" if "supervisorPID" in sample else "poll-direct-child")
+            self.assertIsNone(samples[0]["supervisorReturnCode"]); self.assertIsNone(samples[1]["childReturnCode"])
+            stdout, stderr = parent.communicate(timeout=12)
+            self.assertEqual(parent.returncode, 0, stderr)
+            for name, bound in [("progress.outer.json",8192),("progress.process.json",1024*1024)]:
+                filename=self.root/name; final=json.loads(filename.read_text())
+                self.assertEqual(final["state"],"finished");self.assertLessEqual(filename.stat().st_size,bound)
+                self.assertGreater(final["progressSequence"],samples[0 if '.outer.' in name else 1]["progressSequence"])
+            self.assertEqual(json.loads((self.root/"progress.outer.json").read_text())["reportedExitCode"],0)
+            self.assertFalse(any(p.name.endswith('.tmp') for p in self.root.iterdir()))
+        finally:
+            if parent.poll() is None: parent.kill(); parent.wait(timeout=2)
+
+    def test_diagnostic_file_bound_refuses_without_replacing_previous_receipt(self):
+        filename=self.root/'bounded.json';save_json(filename,{'before':True})
+        before=filename.read_bytes()
+        with self.assertRaisesRegex(ValueError,'fixed file bound'):
+            save_json(filename,{'oversized':'x'*8192},maximum_bytes=8192)
+        self.assertEqual(filename.read_bytes(),before);self.assertFalse(filename.with_name(filename.name+'.tmp').exists())
+
+    def test_progress_write_failure_keeps_supervisor_observation_and_reap_then_fails(self):
+        saved = ci_process.save_json; failed = False
+        def save(path, value, **kwargs):
+            nonlocal failed
+            if path.name.endswith('.outer.json') and value['state']=='running' and not failed:
+                failed=True;raise OSError('Injected diagnostic I/O failure after launch')
+            return saved(path,value,**kwargs)
+        with patch.object(ci_process,'save_json',side_effect=save):
+            result=run_supervised([sys.executable,'-c','print("child completed despite progress error")'],2,self.root/'write-failure',self.cancel)
+        self.assertTrue(failed);self.assertEqual(result['exitCode'],125)
+        self.assertEqual(result['reason'],'outer-progress-evidence-unverified')
+        self.assertTrue(result['supervisor']['directChildWaitCompleted']);self.assertTrue(result['supervisor']['cleanupComplete'])
+        self.assertEqual(result['supervisor']['childReturnCode'],0)
+        self.assertIn('child completed despite progress error',(self.root/'write-failure.log').read_text())
+        outer=json.loads((self.root/'write-failure.outer.json').read_text())
+        self.assertEqual(outer['state'],'finished');self.assertEqual(outer['reportedExitCode'],125)
+        self.assertIn('Injected diagnostic I/O failure',outer['progressWriteError'])
 
     def test_inventory_failure_propagates_after_both_process_successes(self):
         calls = []
@@ -222,11 +286,12 @@ class SimulatorOwnershipTests(unittest.TestCase):
     def cleanup(self):
         return operation("cleanup", self.root, self.selected, None, Cancellation(), runner=self.runner)
 
-    def test_fresh_creation_boot_and_owned_only_cleanup(self):
+    def test_fresh_creation_stays_unbooted_and_owned_only_cleanup(self):
         self.assertEqual(self.create(), 0)
         record = verified_record(self.root / "owned-ui-simulator.json", self.selected)
-        self.assertTrue(record["bootRequested"]); self.assertFalse(record["bootVerified"]); self.assertNotEqual(record["udid"], SHARED)
-        self.assertFalse(any(c[2] == "bootstatus" for c in self.calls if c[0] == "xcrun"))
+        self.assertFalse(record["bootRequested"]); self.assertFalse(record["bootVerified"]); self.assertNotEqual(record["udid"], SHARED)
+        self.assertEqual(record["state"], "created"); self.assertEqual(self.devices[FRESH]["state"], "Shutdown")
+        self.assertFalse(any(c[2] in ["boot", "bootstatus"] for c in self.calls if c[0] == "xcrun"))
         self.assertEqual(self.cleanup(), 0)
         self.assertIn(SHARED, self.devices); self.assertNotIn(FRESH, self.devices)
         receipt = json.loads((self.root / "owned-ui-cleanup.json").read_text())
@@ -274,17 +339,17 @@ class SimulatorOwnershipTests(unittest.TestCase):
     def test_build_then_readiness_shares_440_seconds_and_preserves_future_cleanup(self):
         self.assertEqual(self.create(), 0); self.calls.clear(); clock = Clock(); budgets = []
         def runner(command, timeout, prefix, cancellation):
-            budgets.append((prefix.name, timeout)); clock.now += {"build-compile": 100, "ui-build-bootstatus": 200, "ui-build-ready": 5}[prefix.name]
+            budgets.append((prefix.name, timeout)); clock.now += {"build-compile": 100, "ui-build-boot": 5, "ui-build-bootstatus": 200, "ui-build-ready": 5}[prefix.name]
             if command[0] == "xcodebuild":
                 self.calls.append(command); return {"exitCode": 0, "launched": True}
             return self.runner(command, timeout, prefix, cancellation)
         self.assertEqual(self.build(runner, clock), 0)
-        self.assertEqual(budgets, [("build-compile", 350), ("ui-build-bootstatus", 290), ("ui-build-ready", 120)])
-        self.assertEqual(self.calls[0][0], "xcodebuild"); self.assertEqual(self.calls[1][2], "bootstatus")
+        self.assertEqual(budgets, [("build-compile", 320), ("ui-build-boot", 10), ("ui-build-bootstatus", 285), ("ui-build-ready", 115)])
+        self.assertEqual(self.calls[0][0], "xcodebuild"); self.assertEqual([c[2] for c in self.calls[1:]], ["boot", "bootstatus", "list"])
         self.assertIn(f"platform=iOS Simulator,id={SHARED}", self.calls[0]); self.assertEqual(self.calls[1][3], FRESH)
         self.assertTrue(verified_record(self.root / "owned-ui-simulator.json", self.selected)["bootVerified"])
         receipt = json.loads((self.root / "build-phases.json").read_text())
-        self.assertEqual(receipt["budgetSeconds"], 440); self.assertEqual(receipt["elapsedSeconds"], 305)
+        self.assertEqual(receipt["budgetSeconds"], 440); self.assertEqual(receipt["elapsedSeconds"], 310)
         self.assertTrue(receipt["uiReadiness"]["bootedObserved"])
 
     def test_build_failure_exhaustion_and_cancellation_keep_readiness_unrun(self):
@@ -304,9 +369,10 @@ class SimulatorOwnershipTests(unittest.TestCase):
 
     def test_failed_bootstatus_or_nonbooted_inventory_never_marks_ready(self):
         self.assertEqual(self.create(), 0)
+        owned = self.root / "owned-ui-simulator.json"; original = json.loads(owned.read_text())
         for condition, expected in [("timeout", 124), ("nonbooted", 125)]:
             with self.subTest(condition=condition):
-                self.calls.clear(); clock = Clock()
+                save_json(owned, original); self.devices[FRESH]["state"] = "Shutdown"; self.calls.clear(); clock = Clock()
                 def runner(command, timeout, prefix, cancellation):
                     clock.now += 1
                     if command[0] == "xcodebuild": return {"exitCode": 0, "launched": True}
@@ -326,11 +392,37 @@ class SimulatorOwnershipTests(unittest.TestCase):
         self.assertEqual(self.build(runner, Clock()), 125)
         self.assertFalse(json.loads(owned.read_text())["bootVerified"])
 
-    def test_build_requires_verified_boot_request_before_any_child(self):
+    def test_build_refuses_reused_boot_request_before_any_child(self):
         self.assertEqual(self.create(), 0); owned = self.root / "owned-ui-simulator.json"
-        record = json.loads(owned.read_text()); record["bootRequested"] = False; save_json(owned, record); self.calls.clear()
-        with self.assertRaisesRegex(ValueError, "completed boot request"): self.build(self.runner, Clock())
+        record = json.loads(owned.read_text()); record["bootRequested"] = True; save_json(owned, record); self.calls.clear()
+        with self.assertRaisesRegex(ValueError, "created, unbooted"): self.build(self.runner, Clock())
         self.assertEqual(self.calls, [])
+
+    def test_failed_or_cancelled_boot_request_never_launches_readiness(self):
+        self.assertEqual(self.create(), 0); owned = self.root / "owned-ui-simulator.json"; original = json.loads(owned.read_text())
+        for condition, expected in [("failure", 124), ("cancelled", 143)]:
+            save_json(owned, original); calls = []; cancel = Cancellation(); clock = Clock()
+            def runner(command, timeout, prefix, cancellation):
+                calls.append(prefix.name); clock.now += 1
+                if prefix.name == "ui-build-boot":
+                    self.assertEqual(timeout, 10)
+                    if condition == "cancelled": cancellation.request(signal.SIGTERM)
+                    return {"exitCode": 124 if condition == "failure" else 0, "launched": True}
+                return {"exitCode": 0, "launched": True}
+            self.assertEqual(self.build(runner, clock, cancel), expected)
+            self.assertEqual(calls, ["build-compile", "ui-build-boot"])
+            record = json.loads(owned.read_text()); self.assertFalse(record["bootVerified"]); self.assertFalse(record["bootRequested"])
+            receipt = json.loads((self.root / "build-phases.json").read_text())
+            self.assertTrue(all(p["launched"] is False for p in receipt["phases"][2:]))
+
+    def test_creation_with_unexpected_booted_inventory_refuses_ready(self):
+        def runner(command, timeout, prefix, cancellation):
+            if command[2] == "list": self.devices[FRESH]["state"] = "Booted"
+            return self.runner(command, timeout, prefix, cancellation)
+        self.assertEqual(operation("create", self.root, self.selected, self.inventory(), Cancellation(), runner=runner), 125)
+        record = json.loads((self.root / "owned-ui-simulator.json").read_text())
+        self.assertFalse(record["createdValidated"]); self.assertFalse(record["bootRequested"])
+        self.assertFalse(any(c[2] == "boot" for c in self.calls))
 
 
 if __name__ == "__main__":

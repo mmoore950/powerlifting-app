@@ -14,6 +14,7 @@ import signal
 import subprocess
 import time
 import traceback
+from ci_process import PROGRESS_INTERVAL, process_observations, save_json
 
 KILL_SIGNAL = getattr(signal, "SIGKILL", 9)
 
@@ -58,6 +59,8 @@ def main():
         parser.error("A command is required after --")
 
     started = time.monotonic()
+    next_progress = started
+    deadline = started + args.timeout
     requested_signal = None
     child = None
     posix = os.name == "posix"
@@ -66,14 +69,23 @@ def main():
         "ownership": "new-posix-process-group" if posix else "direct-child-only",
         "timeoutSeconds": args.timeout, "termGraceSeconds": args.term_grace,
         "killWaitSeconds": args.kill_wait, "signalsSent": [],
-        "escapedProcessesAndOSServicesOwned": False,
+        "escapedProcessesAndOSServicesOwned": False, "progressSequence": 0,
     }
 
     def save():
-        evidence["elapsedSeconds"] = round(time.monotonic() - started, 3)
-        temporary = args.receipt.with_name(args.receipt.name + ".tmp")
-        temporary.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
-        os.replace(temporary, args.receipt)
+        nonlocal next_progress
+        now = time.monotonic()
+        evidence.update(elapsedSeconds=round(now-started, 3), observedMonotonic=now,
+                        deadlineMonotonic=deadline, remainingSeconds=deadline-now,
+                        resources=process_observations(), progressSequence=evidence["progressSequence"]+1,
+                        childReturnCode=child.returncode if child is not None else None)
+        next_progress = now + PROGRESS_INTERVAL
+        save_json(args.receipt, evidence, maximum_bytes=1024*1024)
+
+    def progress(operation):
+        evidence["operation"] = operation
+        if time.monotonic() >= next_progress:
+            save()
 
     def cancelled(signum, _frame):
         nonlocal requested_signal
@@ -83,7 +95,7 @@ def main():
     def owned_alive():
         # Poll also reaps the direct child. killpg(0) observes group existence;
         # it cannot distinguish a live descendant from an unreaped zombie.
-        evidence["operation"] = "poll-direct-child"
+        progress("poll-direct-child")
         child.poll()
         if not posix:
             return child.returncode is None
@@ -91,7 +103,7 @@ def main():
 
     def send(signum):
         try:
-            evidence["operation"] = "signal-owned-group" if posix else "signal-direct-child"
+            progress("signal-owned-group" if posix else "signal-direct-child")
             if posix:
                 os.killpg(child.pid, signum)
             elif child.poll() is None:
@@ -107,6 +119,7 @@ def main():
 
     def wait_owned(seconds):
         deadline = time.monotonic() + seconds
+        evidence["cleanupDeadlineMonotonic"] = deadline
         while owned_alive():
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -128,7 +141,7 @@ def main():
             # Observation/signaling errors must not skip the direct-child wait.
             # Grandchildren are not waitable by this process.
             try:
-                evidence["operation"] = "wait-direct-child"
+                progress("wait-direct-child")
                 child.wait(timeout=max(0.01, args.kill_wait if child.poll() is None else 0.01))
             except subprocess.TimeoutExpired:
                 evidence["directChildWaitCompleted"] = False
@@ -141,13 +154,14 @@ def main():
     handlers = {s: signal.signal(s, cancelled) for s in (signal.SIGINT, signal.SIGTERM)}
     exit_code = 125
     try:
+        evidence["operation"] = "launch-command"
         save()
         child = subprocess.Popen(command, start_new_session=posix)
         evidence.update(state="running", childPID=child.pid,
-                        ownedProcessGroupID=child.pid if posix else None)
+                        ownedProcessGroupID=child.pid if posix else None, operation="poll-direct-child")
         save()
-        deadline = started + args.timeout
         while True:
+            progress("poll-direct-child")
             code = child.poll()
             if requested_signal is not None:
                 reason, exit_code = "cancelled", 128 + requested_signal

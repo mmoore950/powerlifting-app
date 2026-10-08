@@ -48,12 +48,22 @@ pass cleanup. The direct-child wait runs in finally even if group cleanup raises
 Apple's [killpg documentation](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/killpg.2.html)
 distinguishes EPERM from ESRCH. The runner's transient EPERM kernel cause is unknown.
 
-Top-level `build-compile.process.json`, `ui-build-bootstatus.process.json`,
+Top-level `build-compile.process.json`, `ui-build-boot.process.json`, `ui-build-bootstatus.process.json`,
 `ui-build-ready.process.json`, `test-ui.process.json` and `test-unit.process.json`
 receipts preserve the command,
 PID/group, reason, signals, child exit and observed cleanup outcome in the plain
 diagnostic artifact. A hard external kill can leave a `running` receipt; that is
-not completed phase evidence. These deadlines do not guarantee OS scheduling or
+not completed phase evidence. Existing supervisor receipts are now atomically
+overwritten about every5s while polling/cleanup progresses, with operation,
+monotonic elapsed/deadline/remaining time, last direct-child poll result and
+self-process CPU/peak RSS (POSIX) observations. Each supervisor receipt is bounded
+to1MiB. Separate `<phase>.outer.json` receipts (<=8KiB) record the outer observer's
+operation, deadline, supervisor poll result and its own resources at the same
+interval and lifecycle transitions. These are fixed-size overwritten files, not
+growing logs or additional diagnostic subprocess loops. They measure each Python
+process, not live xcodebuild/descendant/service totals; missing updates indicate
+only absence of observer progress, not a demonstrated OS/Swift stall cause.
+Windows does not provide the POSIX RSS observation. These deadlines do not guarantee OS scheduling or
 termination of an uninterruptible process. No retry or timeout expansion was added.
 The existing setup phase runs nine focused synthetic supervisor methods, including
 POSIX TERM/KILL, SIGINT/SIGTERM cancellation, child/grandchild cleanup and unrelated
@@ -81,28 +91,43 @@ require review rather than a frozen count. This log gate is not a Swift parser.
 
 `owned_ui_simulator.py` records preexisting IDs, run/attempt/name/runtime/device
 type and validates the returned new UUID against fresh inventory before boot.
-Creation/boot request shares90s including bounded command cleanup within prepare2min;
-it records `bootRequested:true`, `bootVerified:false`. Installed
+Creation/validation shares90s including bounded command cleanup within prepare2min;
+it requires matching available Shutdown inventory and records
+`bootRequested:false`, `bootVerified:false`, state created. Installed
 simctl help/commands/logs are retained. The always cleanup step has100s internal
 budget within its2min step. It validates record/run/current device identity,
 refuses malformed/empty/preexisting IDs, shuts down/deletes only its owned UUID
 and requires observed absence. Cancellation, missing identity or failed commands
 keep cleanup false. Job30 can interrupt cleanup; runner teardown remains external.
-`native-build-phase.py` first compiles on the existing destination while the fresh
-UI simulator boots independently. It then requires successful bootstatus and a
-fresh matching available Booted inventory entry before marking ready. ONE440s
-deadline covers all three commands: compilation retains70s for following work and
-cleanup, bootstatus retains30s for final inventory/cleanup, and each command also
+`native-build-phase.py` first compiles on the existing destination, then requests
+fresh UI boot (10s soft command cap), requires successful bootstatus and a
+fresh matching available Booted inventory entry before marking ready. It rejects
+records with a previous boot request and rechecks the run-owned record before
+device actions; successful boot request persists bootRequestedtrue, not readiness.
+ONE440s deadline covers all four commands: compilation retains100s for following
+work and cleanup, boot request retains70s and bootstatus retains30s for final
+inventory/cleanup. The100s reserve is boot10+cleanup20, bootstatus20+cleanup20,
+inventory10+cleanup20. Thus nominal compile work drops350→320s. Each command also
 reserves20s for its supervisor cleanup/observer. Compile failure, cancellation or
 budget exhaustion leaves explicit unrun readiness in `build-phases.json` and
 prevents the test phase. No separate boot440s allowance or retry. Simulator OS
-startup services are outside the owned command group.
+startup services are outside the owned command group. Sequential boot removes
+simultaneous fresh startup as an unproven contention experiment following run16;
+it is not a demonstrated correction of the unknown host stall cause.
 
-Nineteen orchestration tests include shared budget/cancellation/failure,
+Diagnostic write failure after supervisor launch continues owned observation/
+cancellation/reap and then fails125; it must not abandon the running process.
+
+Twenty-four orchestration tests include shared budget/cancellation/failure,
 inventory omission/duplicate/skip guards, injected simulator identities and a real
 POSIX signal-propagation method. The original14 all passed on macOS in run15;
-the five added build-budget/readiness methods are source-only until a reviewed run.
-Windows18pass/1POSIXskip is not new simctl/macOS proof.
+the then-current nineteen passed on macOS in run16. The changed sequence and
+periodic evidence remain source-only until a reviewed run. Actual local process
+checks observe running supervisor/outer periodic updates before final receipts,
+file bounds, diagnostic I/O failure without abandoning the child, stdout/nonzero
+and direct-child wait, plus injected fresh Shutdown,
+compile/boot/readiness ordering/failure/cancellation/reservations. Windows23pass/
+1POSIXskip is not new simctl/macOS proof.
 Top-level test receipts/logs are retained before temporary fixture cleanup.
 
 1. Run `swift test --package-path Packages/LiftingCore`: fixture cases and 120 deterministic small-inventory comparisons against exhaustive full count-vector enumeration, plus invalid inputs/decoding/selection/cap cases.

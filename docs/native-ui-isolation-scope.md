@@ -67,15 +67,20 @@ Keep the existing selected simulator for non-UI tests. Do not erase/delete exist
 devices, kill global services or choose an unobserved hard-coded device/runtime.
 Capture inventory, state, exact creation/boot commands and times. Actual `xcrun
 simctl help` on the Apple host establishes installed command syntax; Windows does
-not validate it. Create/boot request under the existing prepare2min limit; setup/build/job
+not validate it. Create/validate under the existing prepare2min limit; setup/build/job
 limits remain5/8/30min. An overrun fails with diagnostics, without retry/extension.
 
 Build all targets once using the existing build-for-testing destination/derived
-data. Following actual run15 cold-boot timeout, approved repair shares ONE440s
-deadline across build-for-testing first, required UI bootstatus second, and fresh
-matching Booted inventory proof third. Compilation overlaps natural simulator
-startup; future work/cleanup reservations and failure/unrun receipts retain the
-existing build8min limit. No ready flag from boot request alone, no retry/extension.
+data. Following run16's supervisor outer-observation timeout, the approved
+sequential experiment shares ONE440s deadline across build-for-testing first,
+fresh boot request second, required bootstatus third, and matching Booted inventory
+proof fourth. Prepare never requests boot. Compilation reserves100s future work/
+cleanup (nominal compile320s), boot request is capped10s and reserves70s, bootstatus
+reserves30s; each command also reserves20s cleanup/observation. Operation/deadline/
+self-resource periodic receipts add diagnosis without subprocess polling loops.
+Simultaneous startup contention is unproven; this sequence is an experiment,
+not a root-cause claim. Existing build8/test10/job30 retained. No ready flag from
+boot request alone, no retry/extension.
 In the single existing10min test step, run two sequential
 test-without-building invocations with the same built scheme/derived data:
 
