@@ -6,7 +6,11 @@ Native SwiftUI iPhone source, minimum iOS 17. Working display name: Lift Toolkit
 
 Forward/reverse loading, finite lb/kg inventories, configurable bar/collars, independent display/plate units and per-side diagrams. Training/Attempts add named rep-max estimates, loadable warm-ups and backward planning with persisted equipment. Competition source adds a configurable data client, saved offline pages, search/history and filtered best performances; see `docs/native-data-integration.md`. Bar path source adds local import/playback, experimental automatic candidates and separately labeled manual Vision tracking; see `docs/automatic-bar-experiment.md`. Native execution, reachable service, continuing freshness and real video accuracy remain gates.
 
-**No Swift compiler or Xcode is available in the current Windows workspace. The app has not been compiled or run.** The checks below distinguish specification evidence from actual native execution.
+**No Swift compiler or Xcode is available in this Windows workspace.** Hosted
+Apple CI has compiled/run earlier revisions: ninth `4a700f5` passed57 simulator
+methods; fourteenth `c6eb206` passed42core/14app-host but timed out at UI startup.
+The new portable annotation export/store/picker source is outside those tested
+revisions and awaits native verification. See `docs/status.md` for exact evidence.
 
 ## Structure
 
@@ -19,7 +23,9 @@ Forward/reverse loading, finite lb/kg inventories, configurable bar/collars, ind
 
 ## macOS build gate
 
-The user has no Mac. Hosted validation preparation is documented in `docs/hosted-native-build-plan.md`; no Apple build has run yet.
+The user has no Mac. Hosted validation is documented in
+`docs/hosted-native-build-plan.md`; exact results and remaining native/device gates
+are in `docs/status.md` and `docs/native-validation.md`.
 
 Use a Mac with Xcode 16 or newer, its command-line tools, and an iOS 17+ Simulator runtime. The bundle identifier is a development placeholder. Personal device installation requires configuring your Apple signing team in Xcode; no credentials are stored here.
 

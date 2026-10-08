@@ -48,6 +48,8 @@ enum BarAnalysisError: Error, LocalizedError {
 }
 
 actor BarAnalysisService {
+    /// Maintained implementation identifier, not a Git revision or accuracy claim.
+    static let implementationID = "native-bar-analysis-v1"
     private var running = false
     func analyze(url: URL, start: Double, end: Double, mode: BarAnalysisMode, manualPoint: VideoPoint?,
                  capture: BarFrameCaptureSink? = nil,

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,readFile,writeFile,readdir,rm,stat} from 'node:fs/promises';
+import {mkdtemp,mkdir,readFile,writeFile,readdir,rm,stat,cp} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -11,10 +11,10 @@ import {evaluateNativeBundle} from './evaluate_native_bundle.mjs';
 
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 // Synthetic shape/header fixture ONLY; actual Apple-produced bytes are a later gate.
-async function fixture(root) {
+async function fixture(root,{mediaName='generated.bin'}={}) {
   await mkdir(path.join(root,'frames'));
   const media=Buffer.from('Synthetic wrapper contract bytes, not a movie');
-  await writeFile(path.join(root,'generated.bin'),media);
+  await writeFile(path.join(root,mediaName),media);
   const png=Buffer.alloc(24);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);png.writeUInt32BE(400,16);png.writeUInt32BE(200,20);
   const frames=[];
   for(let index=0;index<3;index++) {
@@ -22,7 +22,7 @@ async function fixture(root) {
     frames.push({id,filename:id+'.png',sha256:sha(png),timestamp:{value:String(index),timescale:30,epoch:0}});
     await writeFile(path.join(root,'frames',id+'.png'),png);
   }
-  const clip={id:'generated-wrapper',sha256:sha(media),localPath:'generated.bin',sourceGroup:'synthetic-wrapper-group',split:'development',synthetic:true,
+  const clip={id:'generated-wrapper',sha256:sha(media),localPath:mediaName,sourceGroup:'synthetic-wrapper-group',split:'development',synthetic:true,
     permissionEvidence:'Generated contract only',lift:'synthetic',targetID:'near-side-hub',uprightWidth:400,uprightHeight:200};
   const predictions={schemaVersion:1,coordinateSpace:'upright-normalized-top-left',modelID:'synthetic-wrapper-only',runs:[{
     clipID:clip.id,sha256:clip.sha256,synthetic:true,mode:'automatic',uprightWidth:400,uprightHeight:200,elapsedSeconds:0.1,
@@ -41,6 +41,32 @@ async function fixture(root) {
   return {ledger,labels,predictions,ledgerBytes,predictionBytes,
     options:{ledgerFile:path.join(root,'ledger.json'),labelsFile:path.join(root,'labels.json'),assetRoot:root,output:path.join(root,'evaluated')}};
 }
+
+test('Portable root remains usable after source removal and supplementary receipt cannot bypass media verification',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'portable-native-contract-'));
+  try {
+    const source=path.join(root,'source'),saved=path.join(root,'saved');await mkdir(source);
+    const mediaName='33333333-3333-4333-8333-333333333333.mov',f=await fixture(source,{mediaName});
+    // Hand-built contract bytes, not Swift/AVFoundation output or a Files-provider save.
+    await writeFile(path.join(source,'bundle.json'),JSON.stringify({ledger:f.ledger,ledgerText:f.ledgerBytes.toString(),ledgerSha256:sha(f.ledgerBytes)}));
+    await writeFile(path.join(source,'export-receipt.json'),JSON.stringify({supplementary:true,sourceSHA256:f.ledger.clip.sha256}));
+    const movie=await readFile(path.join(source,mediaName));
+    await cp(source,saved,{recursive:true,errorOnExist:true,force:false});await rm(source,{recursive:true});
+    const options={ledgerFile:path.join(saved,'ledger.json'),labelsFile:path.join(saved,'labels.json'),assetRoot:saved,output:path.join(root,'evaluated')};
+    const result=await evaluateNativeBundle(options);
+    assert.deepEqual(await readFile(path.join(saved,mediaName)),movie);
+    assert.deepEqual(await readFile(path.join(result.output,'ledger.json')),f.ledgerBytes);
+    assert.deepEqual(await readFile(path.join(result.output,'prediction.json')),f.predictionBytes);
+    assert.equal(result.receipt.source.localPath,mediaName);assert.equal(result.score.reference.observedAnnotations,0);
+    assert.equal(result.score.accuracyGatePassed,false);
+    // The strict wrapper continues checking the actual movie, regardless of receipt claims.
+    await writeFile(path.join(saved,mediaName),'changed movie');
+    await writeFile(path.join(saved,'export-receipt.json'),JSON.stringify({sourceSHA256:sha(Buffer.from('changed movie'))}));
+    const refused=path.join(root,'refused');await assert.rejects(evaluateNativeBundle({...options,output:refused}));
+    await assert.rejects(stat(refused),{code:'ENOENT'});
+    assert.deepEqual(await readFile(path.join(result.output,'ledger.json')),f.ledgerBytes);
+  } finally {await rm(root,{recursive:true,force:true});}
+});
 
 test('Native wrapper binds exact verified buffers and derived references without accuracy promotion',async()=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'native-evaluation-'));

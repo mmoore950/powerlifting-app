@@ -13,9 +13,13 @@ at6db4b41 now enforces supported ledger/label/media/prediction association; the
 generic scorer remains a diagnostic path and accuracyGatePassed staysfalse.
 Corrected clear/save/reload/retry/zoom/public navigation has bounded browser
 evidence atf42b467; independent request audit/direct-file/private access remain
-pending. Source retention and a product export control are proposed in
-`portable-native-capture-scope.md`, not implemented. Twelfth14d50b1 failed POSIX
-supervisor setup before Xcode; diagnostics correctiona3d40a9 awaits native evidence.
+pending. The portable control/store/model/picker are now implemented as source
+only in `portable-native-capture-scope.md`; completed directories include unchanged
+managed source bytes. Four new lifecycle/storage XCTest methods await Apple
+execution, and directory/provider export remains a prototype. Fourteenthc6eb206
+actually passed9POSIX/42core/14app-host but timed out at UI startup; native attachment
+export and the actual generated-wrapper handoff remain open. The numbered review
+below describes the earlier internal helper and its historical gaps.
 
 ## Field and instruction reconciliation
 

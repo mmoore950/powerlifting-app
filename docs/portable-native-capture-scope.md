@@ -1,8 +1,62 @@
 # Local portable annotation capture proposal
 
-October 8, 2026. Proposal only; no product export control or packaging implementation.
-Uses the actual `VideoAnalysisView`, `VideoModel`, `VideoImportStore` and
-`BarFrameBundleExporter` source. Planner approval is required before implementation.
+October 8, 2026. Original proposal below, approved by the planner and now implemented
+as an unverified native prototype. Uses `VideoAnalysisView`, `VideoModel`,
+`VideoImportStore` and `BarFrameBundleExporter`. No new Apple execution has validated
+the portable store/model/picker additions.
+
+## Implementation checkpoint — October 8, 04:54 ET
+
+The explicit Bar path control requires a chosen lift and a positive <=1s window;
+ordinary <=30s analysis remains unchanged. One outer model task joins source hash,
+same-image native capture, whole-movie copy and package publication. Replacement
+and removal invalidate its independent publication token and await cleanup before
+deleting the managed source. Prior analysis is retained on preparation failure.
+
+The default shared store reserves one prepared package. It uses Application
+Support/AnnotationExports, excluded from backup, with owned UUID work/completion
+directories. Completed packages recover after restart and remain until explicit
+discard; picker leases prevent discard. Delegate/dismantle/dismissal callbacks are
+guarded by a fresh presentation identity so an older callback cannot release a
+later retry. Inactive work cleanup is retried before preparation/discard; user
+destinations and managed movies are never store cleanup targets.
+
+Physical limit600MiB includes the supplementary receipt. Movie reads/copies use
+128KiB chunks, actual hashes and cooperative60s per-file checks. Existing native
+capture limits remain1s/16frames/32MiB PNGs/48MiB bundle; source<=500MiB. Initial
+free-space advice uses `2*sourceBytes + 3*82MiB + 64MiB` (maximum1310MiB,
+approximately1.28GiB), with actual known movie size. After capture, advice uses
+`2*actualPackageFileBytes + 64MiB`. Checks are advisory and may not reserve provider
+storage. The whole imported movie is disclosed before export and beside Save.
+
+Original capture bytes, recorded basename and source digest are preserved. Window
+IDs are distinct; recording groups are `recording-sha256-<source digest>` across
+repeated imports/windows. This groups identical recording bytes, not independent
+subjects/sessions. Real footage is development/synthetic:false, with the chosen
+lift; explicit local export action does not infer broader research consent. Model
+identity uses the maintained algorithm identifier and actual app build value,
+or honestly unspecified, without an invented Git revision.
+
+Four new app-host XCTest methods cover byte preservation/recovery/one-slot and
+lease retention, mutation/extra/symlink/revocation/collision rejection, storage and
+copy cancellation, joined model cancellation/removal/replacement and completed
+package survival during a lease. They are source only. The test inventory is now
+42 ordinary core +18 app-host +1 UI expected passing methods, with a separate
+opt-in HTTP skip in the full scheme; none of the four additions has run on Apple.
+
+Actual Windows verification: seven changed Swift files parsed with no grammar
+errors using ignored tree-sitter0.26.0/tree-sitter-swift0.7.3 tooling; whitespace
+check passed. The five native-wrapper Node methods pass, including a new portable
+layout test that removes the original fixture root, verifies unchanged copied
+inputs and rejects changed media despite a supplementary receipt. Its bytes/PNG
+headers are hand-built synthetic contracts, not Apple-produced movies/images.
+
+UIKit directory-copy save/cancel/retry, supported-provider callbacks, scene/view
+departure and SDK/actor compatibility remain native gates. If directory saving
+fails, report its actual result before changing format/dependencies. Actual native
+fixture-to-wrapper evidence remains open after run14's UI timeout. No push/newCI,
+private-media access/upload, full-rep aggregation or accuracy acceptance occurs at
+this source checkpoint. Research references remain zero/accuracyGatePassed:false.
 
 ## Smallest useful flow
 

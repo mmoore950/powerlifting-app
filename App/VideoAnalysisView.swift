@@ -4,6 +4,11 @@ import PhotosUI
 import UniformTypeIdentifiers
 import LiftingCore
 
+private struct AnnotationExportPresentation: Identifiable {
+    let id = UUID()
+    let package: PreparedAnnotationExport
+}
+
 @MainActor
 struct VideoAnalysisView: View {
     @StateObject private var model = VideoModel()
@@ -12,6 +17,10 @@ struct VideoAnalysisView: View {
     @State private var photoImporting = false
     @State private var pickerError: String?
     @State private var analysisMode = BarAnalysisMode.automatic
+    @State private var annotationLift = ""
+    @State private var exportPickerPackage: AnnotationExportPresentation?
+    @State private var activeExportPicker: AnnotationExportPresentation?
+    @State private var exportPresentationTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         NavigationStack {
@@ -56,11 +65,51 @@ struct VideoAnalysisView: View {
                         Text("Pause and tap the near-side bar hub to mark a manual reference point. These points are annotations, not automatic tracking. Points across gaps are never joined into an invented path.").font(.caption)
                         Text("\(model.trace?.samples.filter { $0.kind == .manualReference }.count ?? 0) manual reference points")
                         Button("Clear reference points", action: model.clearTrace)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Development annotation export").font(.headline)
+                            Text("Select a window of at most one second. The export includes the WHOLE imported movie, native frames and analysis; labels are still required.").font(.caption)
+                            Picker("Lift for annotation", selection: $annotationLift) {
+                                Text("Choose lift").tag("")
+                                Text("Squat").tag("squat"); Text("Bench").tag("bench"); Text("Deadlift").tag("deadlift")
+                            }.disabled(model.processing || model.savingAnnotationExport)
+                            let movieBytes = (try? video.url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                            Text("Whole imported movie: \(ByteCountFormatter.string(fromByteCount: Int64(movieBytes), countStyle: .file)). Files lets you choose an on-device or cloud destination.").font(.caption)
+                            Button("Export annotation window") {
+                                _ = model.prepareAnnotationExport(lift: annotationLift, mode: analysisMode)
+                            }.buttonStyle(.bordered)
+                                .disabled(annotationLift.isEmpty || model.end <= model.start || model.end - model.start > 1 || model.processing || model.importing || model.savingAnnotationExport || model.preparedAnnotationExport != nil || model.annotationExportRecoveryNeeded)
+                        }
                         Button("Remove imported copy", role: .destructive) { Task { await model.removeVideo() } }.disabled(model.processing)
                         Text("Removing this copy leaves the original in Photos or Files. Import replacement also removes the previous managed copy. No velocity or calibrated distance is computed.").font(.caption).foregroundStyle(.secondary)
                     } else {
                         ContentUnavailableView("Import a side-angle rep", systemImage: "video", description: Text("Choose a local squat, bench or deadlift clip. No sample tracking path is presented as a real result."))
                     }
+                    if let package = model.preparedAnnotationExport {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Annotation package ready").font(.headline)
+                            Text("Includes the whole \(ByteCountFormatter.string(fromByteCount: Int64(package.sourceBytes), countStyle: .file)) movie · package \(ByteCountFormatter.string(fromByteCount: Int64(package.packageBytes), countStyle: .file)).").font(.caption)
+                            Button(model.savingAnnotationExport ? "Verifying / saving…" : "Save annotation package to Files") {
+                                exportPresentationTask = Task {
+                                    var acquired: PreparedAnnotationExport?
+                                    do {
+                                        let lease = try await model.beginSavingAnnotationExport()
+                                        acquired = lease
+                                        try Task.checkCancellation()
+                                        let presentation = AnnotationExportPresentation(package: lease)
+                                        activeExportPicker = presentation; exportPickerPackage = presentation
+                                    } catch {
+                                        if let acquired { await model.finishSavingAnnotationExport(acquired.id, saved: false) }
+                                    }
+                                }
+                            }.buttonStyle(.borderedProminent).disabled(model.processing || model.savingAnnotationExport)
+                            Button("Discard prepared export", role: .destructive) { Task { await model.discardAnnotationExport() } }
+                                .disabled(model.processing || model.savingAnnotationExport)
+                        }
+                    } else if model.annotationExportRecoveryNeeded {
+                        Button("Discard unreadable prepared export", role: .destructive) { Task { await model.discardAnnotationExport() } }
+                            .disabled(model.processing || model.savingAnnotationExport)
+                    }
+                    if !model.annotationExportStatus.isEmpty { Text(model.annotationExportStatus).font(.caption) }
                     Button("Clear all imported copies", role: .destructive) { Task { await model.clearManagedCopies() } }
                         .disabled(model.importing || photoImporting || model.processing)
                 }.padding()
@@ -68,6 +117,22 @@ struct VideoAnalysisView: View {
                 .fileImporter(isPresented: $files, allowedContentTypes: [.movie]) { result in
                     do { pickerError = nil; model.importFile(try result.get()) }
                     catch { pickerError = error.localizedDescription }
+                }
+                .task { await model.recoverAnnotationExport() }
+                .sheet(item: $exportPickerPackage, onDismiss: {
+                    if let presentation = activeExportPicker {
+                        activeExportPicker = nil
+                        Task { await model.finishSavingAnnotationExport(presentation.package.id, saved: false) }
+                    }
+                }) { presentation in
+                    AnnotationExportPicker(package: presentation.package) { saved, message in
+                        // Delegate, dismantle and sheet dismissal may all report
+                        // completion. A fresh presentation identity prevents a
+                        // delayed callback from releasing a later retry's lease.
+                        guard activeExportPicker?.id == presentation.id else { return }
+                        activeExportPicker = nil; exportPickerPackage = nil
+                        Task { await model.finishSavingAnnotationExport(presentation.package.id, saved: saved, message: message) }
+                    }
                 }
                 .task(id: picked) {
                     guard let picked else { return }
@@ -79,8 +144,16 @@ struct VideoAnalysisView: View {
                         model.importFile(movie.url, temporary: true)
                     } catch { if !Task.isCancelled { pickerError = error.localizedDescription } }
                 }
-                .onDisappear { model.pause(); model.cancelProcessing() }
-                .onChange(of: scenePhase) { _, phase in if phase != .active { model.pause(); model.cancelProcessing() } }
+                .onDisappear {
+                    model.pause(); model.cancelProcessing()
+                    if exportPickerPackage == nil { exportPresentationTask?.cancel() }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase != .active {
+                        model.pause(); model.cancelProcessing()
+                        if exportPickerPackage == nil { exportPresentationTask?.cancel() }
+                    }
+                }
         }
     }
 }

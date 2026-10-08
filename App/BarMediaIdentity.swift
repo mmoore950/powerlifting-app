@@ -4,6 +4,11 @@ import CryptoKit
 /// Shared bounded hashing policy for developer-local prediction and frame exports.
 enum BarMediaIdentity {
     static func verify(_ mediaURL: URL, expectedSHA256: String) throws -> String {
+        let digest = try hash(mediaURL)
+        guard digest == expectedSHA256 else { throw BarPredictionError.hash }
+        return digest
+    }
+    static func hash(_ mediaURL: URL) throws -> String {
         guard mediaURL.isFileURL, mediaURL.host?.isEmpty != false else { throw BarPredictionError.file }
         let before = try URL(fileURLWithPath: mediaURL.path).resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey])
         let limit = 500 * 1024 * 1024
@@ -20,8 +25,7 @@ enum BarMediaIdentity {
         }
         let after = try URL(fileURLWithPath: mediaURL.path).resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
         let digest = hash.finalize().map { String(format: "%02x", Int($0)) }.joined()
-        guard count == size, after.fileSize == size, before.contentModificationDate == after.contentModificationDate,
-              digest == expectedSHA256 else { throw BarPredictionError.hash }
+        guard count == size, after.fileSize == size, before.contentModificationDate == after.contentModificationDate else { throw BarPredictionError.hash }
         return digest
     }
 }

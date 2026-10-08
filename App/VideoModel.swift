@@ -19,12 +19,19 @@ final class VideoModel: ObservableObject {
     @Published private(set) var processingProgress = 0.0
     @Published private(set) var processingStatus = ""
     @Published private(set) var analysisResult: BarAnalysisResult?
+    @Published private(set) var preparedAnnotationExport: PreparedAnnotationExport?
+    @Published private(set) var savingAnnotationExport = false
+    @Published private(set) var annotationExportRecoveryNeeded = false
+    @Published private(set) var annotationExportStatus = ""
     private let store: VideoImportStore
+    private let annotationExports: AnnotationExportStore
     private let analyzer = BarAnalysisService()
     private let predictionExporter = BarPredictionExporter()
     private var analysisTask: Task<Void, Never>?
     private var captureTask: Task<URL, Error>?
     private var captureAuthorization: BarCaptureAuthorization?
+    private var portableTask: Task<PreparedAnnotationExport, Error>?
+    private var portableAuthorization: BarCaptureAuthorization?
     private var analysisGeneration = 0
     private var observerCleanup: (@MainActor @Sendable () -> Void)?
     private var generation = 0
@@ -33,7 +40,9 @@ final class VideoModel: ObservableObject {
     private var itemObservation: NSKeyValueObservation?
     private var importTask: Task<Void, Never>?
 
-    init(store: VideoImportStore = VideoImportStore()) { self.store = store }
+    init(store: VideoImportStore = VideoImportStore(), annotationExports: AnnotationExportStore = .shared) {
+        self.store = store; self.annotationExports = annotationExports
+    }
 
     @discardableResult
     func importFile(_ url: URL, temporary: Bool = false) -> Task<Void, Never> {
@@ -44,6 +53,7 @@ final class VideoModel: ObservableObject {
         pause()
         let previousAnalysis = analysisTask
         let previousCapture = captureTask
+        let previousPortable = portableTask
         importing = true; error = nil
         let task = Task {
             defer {
@@ -53,6 +63,7 @@ final class VideoModel: ObservableObject {
             do {
                 await previousAnalysis?.value
                 _ = await previousCapture?.result
+                _ = await previousPortable?.result
                 try Task.checkCancellation()
                 let imported = try await store.ingest(url)
                 guard request == generation, !Task.isCancelled else { try? await store.remove(imported.url); return }
@@ -162,9 +173,141 @@ final class VideoModel: ObservableObject {
     }
     func cancelProcessing() {
         captureAuthorization?.invalidate()
+        portableAuthorization?.invalidate()
         if processing { cancelling = true; processingStatus = "Cancelling and releasing frame resources" }
         analysisTask?.cancel()
         captureTask?.cancel()
+        portableTask?.cancel()
+    }
+    func recoverAnnotationExport() async {
+        guard !processing, !savingAnnotationExport else { return }
+        do {
+            preparedAnnotationExport = try await annotationExports.recover()
+            annotationExportRecoveryNeeded = false
+        } catch {
+            annotationExportRecoveryNeeded = true
+            annotationExportStatus = "Recovering the prepared export failed: " + error.localizedDescription
+        }
+    }
+    /// One joined task owns hashing, native capture and the portable movie copy.
+    /// Cancellation/removal awaits it before deleting the managed source.
+    @discardableResult
+    func prepareAnnotationExport(lift: String, mode: BarAnalysisMode = .automatic,
+                                 synthetic: Bool = false) -> Task<PreparedAnnotationExport, Error> {
+        guard !processing, !importing, !savingAnnotationExport, preparedAnnotationExport == nil,
+              !annotationExportRecoveryNeeded, let video, start.isFinite, end.isFinite,
+              end > start, end - start <= 1, ["squat", "bench", "deadlift"].contains(lift) else {
+            error = AnnotationExportError.state.localizedDescription
+            return Task { throw AnnotationExportError.state }
+        }
+        let seed = trace?.samples.first { $0.kind == .manualReference && abs($0.seconds-start) <= 0.05 }?.point
+        if mode == .manual, seed == nil {
+            error = BarAnalysisError.manualPoint.localizedDescription
+            return Task { throw BarAnalysisError.manualPoint }
+        }
+        pause(); error = nil; processing = true; cancelling = false; processingProgress = 0
+        processingStatus = "Checking space and identifying the whole imported movie"
+        analysisGeneration += 1; let run = analysisGeneration, clipGeneration = generation
+        let trimStart = start, trimEnd = end
+        let capturePermission = BarCaptureAuthorization(), publication = BarCaptureAuthorization()
+        captureAuthorization = capturePermission; portableAuthorization = publication
+        let build = (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "unspecified"
+        let modelID = BarAnalysisService.implementationID + "/app-build-" + build
+        let task = Task<PreparedAnnotationExport, Error> {
+            var work: AnnotationExportWork?, exporter: BarFrameBundleExporter?, completed: PreparedAnnotationExport?
+            defer {
+                if run == analysisGeneration {
+                    processing = false; cancelling = false; portableTask = nil
+                    portableAuthorization = nil; captureAuthorization = nil
+                }
+            }
+            do {
+                return try await withTaskCancellationHandler {
+                    let current = try await annotationExports.begin(mediaURL: video.url); work = current
+                    try Task.checkCancellation(); try publication.check()
+                    guard generation == clipGeneration, analysisGeneration == run, self.video?.url == video.url else { throw AnnotationExportError.identity }
+                    let context = BarFrameBundleContext(
+                        prediction: BarPredictionContext(clipID: "window-" + current.id.uuidString,
+                            expectedSHA256: current.sourceSHA256, modelID: modelID, synthetic: synthetic),
+                        assetRoot: video.url.deletingLastPathComponent(), localPath: video.url.lastPathComponent,
+                        sourceGroup: "recording-sha256-" + current.sourceSHA256, split: "development",
+                        permissionEvidence: synthetic ? "Generated fixture for local lifecycle verification" : "User explicitly selected local annotation export; broader research consent unspecified",
+                        lift: synthetic ? "synthetic" : lift, targetID: "near-side-hub")
+                    let writer = try BarFrameBundleExporter(mediaURL: video.url, context: context,
+                        destination: current.capture, authorization: capturePermission)
+                    exporter = writer
+                    let sink = try await writer.prepare()
+                    processingStatus = "Capturing the selected native annotation window"
+                    let result = try await analyzer.analyze(url: video.url, start: trimStart, end: trimEnd,
+                        mode: mode, manualPoint: seed, capture: sink) { [weak self] update in
+                        Task { @MainActor [weak self] in
+                            guard let self, self.analysisGeneration == run, self.generation == clipGeneration,
+                                  self.processing, !self.cancelling else { return }
+                            self.processingProgress = update.fraction * 0.8; self.processingStatus = update.reason
+                        }
+                    }
+                    try Task.checkCancellation(); try publication.check()
+                    _ = try await writer.finish(result: result)
+                    processingStatus = "Copying and verifying the whole imported movie"
+                    let package = try await annotationExports.finish(current, context: context, authorization: publication)
+                    completed = package
+                    // Package publication has its own token; the capture token
+                    // was consumed when writer.finish published its directory.
+                    guard !Task.isCancelled, !cancelling, generation == clipGeneration,
+                          analysisGeneration == run, self.video?.url == video.url else { throw AnnotationExportError.identity }
+                    preparedAnnotationExport = package; annotationExportRecoveryNeeded = false
+                    trace = result.trace; analysisResult = result; processingProgress = 1
+                    processingStatus = "Annotation package prepared; choose Save to Files"
+                    annotationExportStatus = "Development annotation export: labels and evaluation still required."
+                    return package
+                } onCancel: { capturePermission.invalidate(); publication.invalidate() }
+            } catch {
+                capturePermission.invalidate(); publication.invalidate()
+                await exporter?.abort()
+                do {
+                    if let completed { try await annotationExports.discard(completed.id) }
+                    if let work { try await annotationExports.abort(work) }
+                } catch {
+                    annotationExportRecoveryNeeded = true
+                    annotationExportStatus = "Prepared-export cleanup needs attention: " + error.localizedDescription
+                }
+                if run == analysisGeneration, clipGeneration == generation {
+                    processingStatus = Task.isCancelled ? "Annotation export cancelled; previous analysis retained" : "Annotation export failed; previous analysis retained"
+                    if !Task.isCancelled { self.error = error.localizedDescription }
+                }
+                throw error
+            }
+        }
+        portableTask = task
+        return task
+    }
+    func beginSavingAnnotationExport() async throws -> PreparedAnnotationExport {
+        guard let package = preparedAnnotationExport, !processing, !savingAnnotationExport else { throw AnnotationExportError.busy }
+        savingAnnotationExport = true
+        do {
+            let lease = try await annotationExports.acquirePickerLease(package.id)
+            if Task.isCancelled {
+                await annotationExports.releasePickerLease(package.id)
+                throw CancellationError()
+            }
+            return lease
+        } catch {
+            savingAnnotationExport = false; annotationExportStatus = error.localizedDescription
+            throw error
+        }
+    }
+    func finishSavingAnnotationExport(_ id: UUID, saved: Bool, message: String? = nil) async {
+        await annotationExports.releasePickerLease(id)
+        savingAnnotationExport = false
+        annotationExportStatus = message ?? (saved ? "Files export completed. Keep the movie and all capture files together for labeling." : "Files export cancelled; the prepared package is retained for retry.")
+    }
+    func discardAnnotationExport() async {
+        guard !processing, !savingAnnotationExport else { return }
+        do {
+            try await annotationExports.discard(preparedAnnotationExport?.id)
+            preparedAnnotationExport = nil; annotationExportRecoveryNeeded = false
+            annotationExportStatus = "Prepared export discarded. Saved Files copies are unchanged."
+        } catch { annotationExportStatus = error.localizedDescription }
     }
     /// Explicit developer-local operation; no product button or implicit destination.
     /// The same analysis result produces both the PNG ledger and prediction JSON.
@@ -246,6 +389,7 @@ final class VideoModel: ObservableObject {
         generation += 1; importTask?.cancel(); importing = false
         await analysisTask?.value
         _ = await captureTask?.result
+        _ = await portableTask?.result
         let previous = video?.url
         detachPlayer(); video = nil; trace = nil; analysisResult = nil; seconds = 0; start = 0; end = 0
         if let previous {
@@ -268,6 +412,7 @@ final class VideoModel: ObservableObject {
         importTask?.cancel()
         analysisTask?.cancel()
         captureAuthorization?.invalidate(); captureTask?.cancel()
+        portableAuthorization?.invalidate(); portableTask?.cancel()
         // Deinit may run off the main actor. Retain only the Sendable cleanup closure,
         // which owns the matching player/token and performs removal on the main actor.
         if let observerCleanup { Task { @MainActor in observerCleanup() } }

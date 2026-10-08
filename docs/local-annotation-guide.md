@@ -8,7 +8,36 @@ Windows PyAV bundles produce development drafts. They do not establish that thei
 
 ## Developer native capture: Apple host required
 
-This is an internal developer method, without a product export button. It cannot run on this Windows host. Apple CI capture checks used only generated test movies; no private videos are authorized for CI. Private local capture needs an authorized Apple host/device and the remaining browser gate below. Do not upload a managed movie or bundle to GitHub to work around those requirements. The proposed product flow is scoped in `docs/portable-native-capture-scope.md`; it is not implemented.
+This section describes the internal developer helper. A separate portable export
+control is now implemented in source, but has not compiled/run on Apple; see the
+prototype instructions below and `docs/portable-native-capture-scope.md`. Neither
+route runs on this Windows host. Apple CI uses generated test movies only; no
+private videos are authorized for CI. Private local capture needs authorized Apple
+access and the remaining browser gate. Do not upload a managed movie or bundle to
+GitHub to work around those requirements.
+
+### Portable export prototype — native verification pending
+
+In a reviewed native build, import one selected video in Bar path, select a positive
+window <=1second, choose the lift and identification mode, then select **Export
+annotation window**. Manual mode retains its start-seed requirement. The export
+includes the **whole imported movie**, even for this short window; its measured
+size is shown before preparation. Preparation and **Save annotation package to
+Files** are separate steps. Choose an on-device Files destination for a local
+handoff; a cloud provider can sync according to the selected destination.
+
+The completed <=600MiB directory contains unchanged source bytes at the ledger
+basename, frames, ledger/prediction/bundle and a supplementary export receipt.
+Keep them together. Use the saved directory as CLI `--asset-root`, its `ledger.json`
+for the strict wrapper and `bundle.json` for labeling. The initial metadata is
+development-only; repeated identical movies keep the same recording hash group.
+Subject/session grouping and research permission still require explicit review.
+
+Save cancellation retains one prepared package for retry. Removing the imported
+copy does not invalidate a completed package. **Discard prepared export** removes
+app preparation only; saved Files destinations are preserved. UIKit directory
+saving, provider cancel/retry/lifetime and actual saved-byte verification remain
+unrun native gates; the source control is not an installed private-video workflow.
 
 On an Apple development host, import the explicitly selected clip into `VideoModel`, then select a range of at most **one second** using the existing start/end controls. The context describes the **managed imported copy** returned by `model.video.url`. Compute its SHA-256 locally; `assetRoot` must contain that copy and `localPath` must resolve to it. The original filename outside the managed directory will fail identity checks. Choose a new destination with an existing parent directory, outside Git. No folder scan occurs.
 
