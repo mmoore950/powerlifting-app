@@ -1,6 +1,17 @@
 # Native client / actual service HTTP boundary scope
 
-Scoped October 8, 2026 after run 37726403071. Recommendation only; no new integration test or CI step implemented.
+Scoped October 8, 2026 after run 37726403071. Leader accepted the proposal. The implementation checkpoint below supersedes the initial recommendation's unimplemented state; Apple execution remains pending.
+
+## Implementation checkpoint
+
+- Shared original synthetic row/CSV helpers; 54-row boundary fixture (29 exact names, 26 qualifying rankings, 26 Alice #1 history rows), existing importer/server/QueryPool, ephemeral 127.0.0.1 listener and parent-owned temporary root. Explicit expected identities/order/totals and fixed version digest in Swift; no full dataset/upstream request.
+- Added one macOS-only opt-in OPLHTTPContractTests method. Exact HTTPS fixture origin adapter rejects alternate schemes/hosts/ports/userinfo/fragments, preserves encoded path/query and invokes OPLURLSessionTransport. Added actual paginated metadata/search/history/rankings/plus-class/version-error assertions; no production code or ATS changes.
+- Node runner validates listener descriptor/PID, writes one-time execution token and requires matching completion proof plus successful Swift exit. Missing/skipped/undiscovered test cannot satisfy that proof. Ordinary macOS package run will discover the extra method as skipped, not an extra pass; simulator inventory stays 53.
+- Fixture startup 15 seconds; runner/fixture lifetime 150 seconds; owned POSIX process groups receive termination with five-second forced fallback before temporary-root cleanup. Hard CI setup/contract phases three minutes each, whole job 30 minutes, simulator tests 10 minutes unchanged. Abrupt host loss can prevent cleanup/log upload; controlled failure/shutdown paths are handled.
+- Pinned Node 24.19.0 darwin-x64 SHA-256 from [official SHASUMS](https://nodejs.org/dist/v24.19.0/SHASUMS256.txt); pnpm 11.25.0 archive SHA-512 from [official registry metadata](https://registry.npmjs.org/pnpm/11.25.0). CI checks both before execution and installs production dependencies from existing pnpm-lock.yaml with frozen-lockfile/ignore-scripts. Local pnpm archive integrity/executable path verified.
+- Actual Windows checks: all four affected service.test.mjs tests passed once after extraction (0.932 seconds), live Node fixture probe verified all three paginated endpoints, fixed version/counts/ordering/plus filter/freshness/real 409 and clean shutdown. Runner missing-Swift failure returned nonzero and removed its owned root. Bash syntax/actionlint/JS syntax/diff checks pass. Swift is unavailable locally; native method and macOS provisioning are unrun. Initial probe inherited stdin-only Node arguments and failed; corrected invocation passed. Automatic review blocked removal of that initial empty probe folder, which remains at C:\Users\micha\AppData\Local\Temp\lifting-http-contract-probe-Wh7wEh; it contains no dataset or running process.
+
+Next leader source review and authorized Apple dispatch. Source checkpoint estimate 20–35 minutes, no hard implementation deadline; first CI 10–18 minutes after runner start remains provisional with install/network/Swift uncertainty and hard job 30 minutes. Public TLS/iOS networking/rendering/hosting/recurring freshness remain separate gates.
 
 ## Existing evidence and gap
 

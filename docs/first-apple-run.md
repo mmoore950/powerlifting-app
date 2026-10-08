@@ -4,7 +4,7 @@
 
 The first-run prerequisites below were resolved through the authorized private `mmoore950/powerlifting-app` repository and hosted macOS validation. Latest run [37726403071](https://github.com/mmoore950/powerlifting-app/actions/runs/37726403071), revision `58f3d63`, passed unsigned simulator build, 42 macOS core tests and 53 simulator methods (42 core, 10 app-host, 1 UI), including all four synthetic media lifecycle checks. Five named screenshot files were exported; previous default-screen visual review was accepted separately. Evidence and limits are in `status.md` and `native-validation.md`.
 
-Zero observed real-lift evaluation clips, no production scheduler/reachable approved HTTPS service, and no real-device/signing/release evidence remain current limitations. The proposed next native/service boundary scope is in `native-http-boundary-scope.md`; it is not implemented yet. Readiness timing remains blocked on these prerequisites and scope decisions. Latest native job took about 10m50, test phase 7m20, with hard test 10 minutes/job 30 minutes; these process bounds do not estimate research readiness.
+Zero observed real-lift evaluation clips, no production scheduler/reachable approved HTTPS service, and no real-device/signing/release evidence remain current limitations. The native/service HTTP boundary test source and CI phase are prepared in `native-http-boundary-scope.md`; their Swift execution is pending. Readiness timing remains blocked on these prerequisites and scope decisions. Latest native job took about 10m50, test phase 7m20, with hard test 10 minutes/job 30 minutes; these process bounds do not estimate research readiness.
 
 ## Historical first-run handoff — superseded where noted above
 

@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 output="$PWD/artifacts/native-ci"
 mkdir -p "$output"
-phase="${1:?Expected setup/core/prepare/build/test/screenshots/summary}"
+phase="${1:?Expected setup/core/http-setup/http-contract/prepare/build/test/screenshots/summary}"
 if [[ "$phase" != summary ]]; then
   # pipefail propagates command failures; logs survive ordinary step failures.
   exec > >(tee "$output/$phase.log") 2>&1
@@ -37,6 +37,38 @@ case "$phase" in
     ;;
   core)
     swift test --package-path Packages/LiftingCore
+    ;;
+  http-setup)
+    # Both archives are pinned and checked before execution. No setup action or script hook.
+    tool_dir="${RUNNER_TEMP:?}/powerlifting-http-tools"
+    mkdir -p "$tool_dir/node" "$tool_dir/pnpm"
+    curl --fail --location --max-time 60 --retry 1 \
+      https://nodejs.org/dist/v24.19.0/node-v24.19.0-darwin-x64.tar.gz \
+      --output "$tool_dir/node.tar.gz"
+    printf '%s  %s\n' d1b5e999db158c62fe8f7267a4476b035d8bd93b1a605bac24a3f0dd166e3316 \
+      "$tool_dir/node.tar.gz" | shasum -a 256 --check
+    tar -xzf "$tool_dir/node.tar.gz" --strip-components=1 -C "$tool_dir/node"
+    export PATH="$tool_dir/node/bin:$PATH"
+    test "$(node --version)" = v24.19.0
+    curl --fail --location --max-time 60 --retry 1 \
+      https://registry.npmjs.org/pnpm/-/pnpm-11.25.0.tgz --output "$tool_dir/pnpm.tgz"
+    python3 - "$tool_dir/pnpm.tgz" <<'PY'
+import base64, hashlib, sys
+expected = 'XN6SW08HX3Jetx+64YpC/+eEUkeJ8ZthxzHLhyHsKKruFg4BqNWvT+2ypCzb8wDv4j2zVrDUoXtNY+EfirfJVg=='
+with open(sys.argv[1], 'rb') as stream:
+    actual = base64.b64encode(hashlib.sha512(stream.read()).digest()).decode()
+if actual != expected:
+    raise SystemExit('Pinned pnpm archive integrity mismatch')
+print('Verified pinned pnpm 11.25.0 archive SHA-512')
+PY
+    tar -xzf "$tool_dir/pnpm.tgz" --strip-components=1 -C "$tool_dir/pnpm"
+    test "$(node "$tool_dir/pnpm/bin/pnpm.cjs" --version)" = 11.25.0
+    node "$tool_dir/pnpm/bin/pnpm.cjs" --dir DataService install --frozen-lockfile --ignore-scripts --prod
+    printf '%s\n' "$tool_dir/node/bin" >> "${GITHUB_PATH:?}"
+    ;;
+  http-contract)
+    test "$(node --version)" = v24.19.0
+    node tools/ci/native-http-contract.mjs
     ;;
   prepare)
     xcodegen --version
@@ -84,7 +116,7 @@ PY
       printf '## Native validation diagnostics\n\n'
       printf 'Runner label: `macos-15-intel`; actual versions are in setup.log.\n\n'
       printf 'Revision: `%s`\n\n' "$(git rev-parse HEAD)"
-      for checked_phase in setup core prepare build test screenshots; do
+      for checked_phase in setup core http-setup http-contract prepare build test screenshots; do
         if [[ -f "$output/$checked_phase.exit-code" ]]; then
           printf -- '- %s exit code: %s\n' "$checked_phase" "$(cat "$output/$checked_phase.exit-code")"
         else

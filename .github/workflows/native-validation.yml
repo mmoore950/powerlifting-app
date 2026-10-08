@@ -29,6 +29,12 @@ jobs:
       - name: Test Foundation core on macOS
         timeout-minutes: 8
         run: bash tools/ci/native-validation.sh core
+      - name: Install verified Node and locked service dependencies
+        timeout-minutes: 3
+        run: bash tools/ci/native-validation.sh http-setup
+      - name: Test actual Swift URLSession to Node HTTP contract
+        timeout-minutes: 3
+        run: bash tools/ci/native-validation.sh http-contract
       - name: Generate project and choose an available iPhone simulator
         id: simulator
         timeout-minutes: 2
