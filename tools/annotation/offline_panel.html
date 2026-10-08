@@ -1,0 +1,22 @@
+<style>
+#ui_top_panel > :not(#hub_panel),#leftsidebar,#annotation_editor_panel,#image_grid_panel,#page_start_info {display:none!important}
+#hub_panel {padding:12px;background:#f1f4f8;color:#17202a;font:15px system-ui;line-height:1.5}
+#hub_panel button,#hub_panel input,#hub_panel select {font:inherit;margin:3px;padding:4px}
+#hub_panel label {display:inline-block;margin-right:8px}
+#hub_status {white-space:pre-wrap;color:#173e60}
+#hub_frame {font-weight:600}
+</style>
+<section id="hub_panel" aria-label="Offline hub annotation">
+<strong>Local hub annotation · development frames</strong>
+<div>Click the near-side hub only when visible. Drag a point to correct it, or clear and click again. Save a draft before closing.</div>
+<label>Load frame bundle <input id="hub_bundle" type="file" accept=".json"></label>
+<label>Reload saved draft <input id="hub_draft" type="file" accept=".json"></label>
+<button id="hub_save">Save draft</button><button id="hub_export">Export labels</button>
+<div><button id="hub_prev">Previous frame</button><button id="hub_next">Next frame</button>
+<button id="hub_zoom_in">Zoom in</button><button id="hub_zoom_out">Zoom out</button><button id="hub_clear">Clear point</button>
+<label>Visibility <select id="hub_visibility"><option value="">Choose visibility</option><option>visible</option><option>occluded</option><option>outside-frame</option><option>uncertain</option></select></label>
+<label>Uncertainty radius (pixels, minimum 1) <input id="hub_uncertainty" type="number" min="1" step="0.5"></label>
+<button id="hub_review">Mark reviewed</button><button id="hub_unreview">Mark unreviewed</button></div>
+<div id="hub_frame">Load a local bundle to begin.</div><div id="hub_status" role="status"></div>
+<details><summary>Offline request observation</summary><pre id="hub_network">No network attempts observed.</pre></details>
+</section>

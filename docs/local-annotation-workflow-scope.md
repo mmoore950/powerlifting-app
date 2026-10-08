@@ -1,5 +1,7 @@
 # Local manual hub annotation: bounded scope
 
+Implementation source/runtime checkpoint and remaining browser acceptance are now documented in [local-annotation-guide.md](local-annotation-guide.md). The proposal below is historical; private use remains pending the final browser round-trip/request gate.
+
 October 8, 2026. The human offered their own training videos and asked to do labeling themselves. A private folder has not been supplied; none has been read. This is an implementation proposal, not a working labeling tool or model-training result. Existing public development media remains local/ignored and the reference manifest remains empty.
 
 ## Recommended first workflow

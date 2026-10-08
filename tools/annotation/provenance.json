@@ -1,0 +1,29 @@
+{
+  "upstreamVersion": "2.0.12",
+  "upstreamURL": "https://www.robots.ox.ac.uk/~vgg/software/via/via.html",
+  "upstreamSHA256": "a225d22d89fd5b901769670fb94d4e117543d748c1c2dd8cf2fa7a4777f08322",
+  "derivativeSHA256": "c574743609f18b388ea6d8667bb0b49c86e15a2f4865cc9a214cdf73b239dfba",
+  "disabledFunctions": [
+    "project_file_add_url_with_input",
+    "project_file_add_url_input_done",
+    "project_file_add_url",
+    "project_file_add_abs_path_with_input",
+    "project_file_add_abs_path_input_done",
+    "project_open",
+    "project_open_parse_json_file",
+    "project_open_select_project_file",
+    "_via_file_resolve",
+    "_via_file_resolve_all_to_default_filepath",
+    "sel_local_images",
+    "sel_local_data_file"
+  ],
+  "changes": [
+    "Removed Google Analytics script",
+    "Removed remote import/project-load/search-path implementations",
+    "Neutralized remote links",
+    "Disabled upstream shortcuts to hidden dialogs",
+    "Added restrictive CSP",
+    "Added explicit local frame/draft labeling controls"
+  ],
+  "license": "BSD-2-Clause; full upstream notice retained in both HTML files"
+}
