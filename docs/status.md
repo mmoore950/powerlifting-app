@@ -1,5 +1,24 @@
 # Worker status
 
+## Run18 diagnosed; profile implementation active — October 8, 2026, 07:26 ET
+
+- Verified archive evidence is in native-run18-evidence.md. Compilation succeeded
+  (137.632s); bootstatus migration did not reach readiness. Shared build125 at
+  435.625s; bootstatus outer timeout retained a running cleanup receipt, not final
+  wait/group absence proof. Simulator cleanup inventory timed out124; that command
+  was reaped, but device shutdown/delete/absence unverified. Tests/exports skipped.
+- Actual POSIX11 and orchestration29 pass; macOS core42pass1skip and separate HTTP1
+  pass. Native63 and warm UI-to-unit experiment were not executed. No retry,
+  root-cause/cure or readiness claim. Native acceptance ETA unavailable until a
+  reviewed next experiment yields evidence; build8/test10/job30 limits remain.
+- Leader approved exact-name filtered profile summary, retaining ranking filter
+  context and complete snapshot winners. Source changes underway; actual new
+  Windows profile service tests2pass in0.580s, including live HTTP and two-version
+  additions/corrections/removals. These do not validate Swift/UI. Remaining source
+  and handoff estimate 25–45min from07:26ET, noharddeadline, uncertain recovery/
+  DTO checks; re-estimate at the next source checkpoint. Production/private/release
+  gates separate. Next queue: profile error/empty/offline/version UI audit.
+
 ## User-facing gap assessment â€” October 8, 2026, 07:21 ET
 
 - Scope complete in lifter-profile-feature-scope.md: recommend one exact-source-name,
