@@ -45,7 +45,8 @@ copy cancellation, joined model cancellation/removal/replacement and completed
 package survival during a lease, plus an extracted picker-lifecycle test delivering
 an old dismissal after a new retry begins. They are source only. The test inventory
 is now42 ordinary core+19 app-host+1UI expected passing methods, with a separate
-opt-in HTTP skip in the full scheme; none of the five additions has run on Apple.
+HTTP method absent on iOS and a separate macOS opt-in skip/HTTP gate; none of the
+five additions has run on Apple. The iOS inventory is62methods, with no expected skip.
 
 Actual Windows verification at initial checkpoint: seven changed Swift files parsed with no grammar
 errors using ignored tree-sitter0.26.0/tree-sitter-swift0.7.3 tooling; the four files

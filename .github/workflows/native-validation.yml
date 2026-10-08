@@ -35,7 +35,7 @@ jobs:
       - name: Test actual Swift URLSession to Node HTTP contract
         timeout-minutes: 3
         run: bash tools/ci/native-validation.sh http-contract
-      - name: Generate project and choose an available iPhone simulator
+      - name: Generate project and prepare one owned fresh UI simulator
         id: simulator
         timeout-minutes: 2
         run: bash tools/ci/native-validation.sh prepare
@@ -44,14 +44,18 @@ jobs:
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.simulator_id }}
         run: bash tools/ci/native-validation.sh build
-      - name: Run core, app-host and UI smoke tests through the iOS simulator scheme
+      - name: Run isolated UI then all non-UI tests under one shared deadline
         timeout-minutes: 10
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.simulator_id }}
         run: bash tools/ci/native-validation.sh test
-      - name: Export UI screenshot attachments for visual review
+      - name: Export both UI screenshots and generated unit attachments
         timeout-minutes: 2
         run: bash tools/ci/native-validation.sh screenshots
+      - name: Clean only this run's recorded owned UI simulator
+        if: always()
+        timeout-minutes: 2
+        run: bash tools/ci/native-validation.sh cleanup
       - name: Summarize diagnostic evidence
         if: always()
         run: bash tools/ci/native-validation.sh summary

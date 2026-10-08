@@ -8,21 +8,30 @@ Record Mac/Xcode/Swift/XcodeGen versions, Simulator/iPhone model and OS, exact c
 
 The manual workflow now includes PowerliftingAppUITests: one smoke method launches the app, visits Plates, Training, Attempts, Competition and Bar path, checks reachable tabs/navigation plus disconnected-data/local-import controls, and attaches five named screenshots with keepAlways lifetime. Training/Attempts are two tabs within one feature group. No private media, live API, fake lifters or tracking paths are supplied. CI uses a fresh hosted simulator; this test expects no previously configured endpoint or imported video.
 
-After successful scheme tests, `bash tools/ci/native-validation.sh screenshots` exports all attachments from test.xcresult using xcresulttool and requires at least five PNG files. Review the attachment manifest/names and images under artifacts/native-ci/screenshots; a file count is not visual approval. Existing result bundles are retained on test failure; the export step is skipped then. The manual trigger, 10-minute test-step limit, 30-minute job limit and three-day artifact retention remain. Run 37723566137 at revision 2611743 actually passed the UI test and exported the exact five named screenshots. Copies/manifest are preserved under artifacts/native-ci-runs/37723566137/screenshots; observed visual anomalies and remaining gates are recorded in docs/status.md.
+After successful aggregate tests, `bash tools/ci/native-validation.sh screenshots`
+exports BOTH results: `test-ui.xcresult` to `screenshots/ui` for the exact five-name
+UI checker, and `test-unit.xcresult` to `screenshots/unit` for its generated native
+capture manifest and bounded extraction recipe. No manifest merging or image
+substitution. Both raw result bundles survive test failure; export remains skipped
+then. The split workflow has not run on Apple. Older run37723566137 at2611743
+actually passed/exported its five UI images from a single result; that historical
+evidence does not validate the new split route. Test10/job30 and retention3days remain.
 
 Review all five screenshots for clipping, unreadable text, navigation visibility and honest disconnected/no-video states. This single default portrait smoke pass has no pixel baselines and does not exercise data browsing, video import/analysis, accessibility settings or device lifecycle. Successful tab navigation does not satisfy the acceptance checks below.
 
 ## Build and numerical execution
 
-The build phase now uses `build-for-testing`; the test phase uses
-`test-without-building` with the same scheme, destination and derived-data path.
-The full scheme and screenshot gate remain. This follows [Apple's xcodebuild
+The build phase uses `build-for-testing` on the selected existing simulator. The
+new test orchestrator runs UI first on one owned fresh simulator, then all non-UI
+scheme targets on the original destination, using `test-without-building` and the
+same scheme/derived data. The full scheme and both export gates remain. This follows [Apple's xcodebuild
 documentation](https://developer.apple.com/library/archive/technotes/tn2339/_index.html).
 The unchanged outer limits are build 8 minutes, test 10 minutes and job 30 minutes.
 
 `tools/ci/supervise-process.py` launches xcodebuild without a shell in a new POSIX
-session/process group. Internal monotonic deadlines are 440/560 seconds, leaving
-40 seconds for cleanup and receipt writing before the outer step limit. Timeout
+session/process group. Build uses440s; the split test phase shares560s and gives
+each invocation its remaining budget minus cleanup reserve. The outer8/10min
+limits retain margin for receipt writing and bounded observation. Timeout
 or SIGINT/SIGTERM signals only that owned group, allows 5 seconds of grace, then
 uses KILL if necessary, observes the group for up to 5 seconds and waits for the
 direct child for up to 5 seconds. Remaining owned descendants are also cleaned
@@ -37,7 +46,8 @@ pass cleanup. The direct-child wait runs in finally even if group cleanup raises
 Apple's [killpg documentation](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/killpg.2.html)
 distinguishes EPERM from ESRCH. The runner's transient EPERM kernel cause is unknown.
 
-Top-level `build.process.json`/`test.process.json` receipts preserve the command,
+Top-level `build.process.json`, `test-ui.process.json` and `test-unit.process.json`
+receipts preserve the command,
 PID/group, reason, signals, child exit and observed cleanup outcome in the plain
 diagnostic artifact. A hard external kill can leave a `running` receipt; that is
 not completed phase evidence. These deadlines do not guarantee OS scheduling or
@@ -50,6 +60,34 @@ Source/local success is separate from macOS/Xcode execution.
 Supervisor test receipts/stdout/stderr are retained as unique top-level diagnostic
 files, with separate SIGTERM/SIGINT suffixes. Error receipts include the actual
 exception traceback and operation; a failed cleanup assertion does not erase them.
+
+`native-test-phases.py` owns ONE monotonic560s budget across both invocations,
+including cleanup reservations. Each child gets remaining time minus20s (15s
+existing supervisor cleanup plus observation margin). Cancellation is forwarded to
+the current supervisor/group; exhausted/failed/cancelled phases cannot launch the
+second command. `test-phases.json` records the aggregate and partial/unrun phases.
+An outer observation failure stops only the owned supervisor wrapper and reports
+unverified child cleanup, never successful cleanup of escaped sessions/services.
+
+The current named XCTest source inventory is42core+19app-host+1UI=62 iOS methods;
+the HTTP test is entirely macOS-only, so iOS has no expected HTTP skip. Its separate
+actual HTTP gate and macOS opt-in skip remain. `check-test-inventory.py` requires
+the split passing IDs to match current iOS sources exactly once, with no omitted,
+extra, failed or skipped methods. Unsupported conditional/generated source forms
+require review rather than a frozen count. This log gate is not a Swift parser.
+
+`owned_ui_simulator.py` records preexisting IDs, run/attempt/name/runtime/device
+type and validates the returned new UUID against fresh inventory before boot.
+Create/boot shares90s plus bounded command cleanup within prepare2min; installed
+simctl help/commands/logs are retained. The always cleanup step has100s internal
+budget within its2min step. It validates record/run/current device identity,
+refuses malformed/empty/preexisting IDs, shuts down/deletes only its owned UUID
+and requires observed absence. Cancellation, missing identity or failed commands
+keep cleanup false. Job30 can interrupt cleanup; runner teardown remains external.
+Fourteen added orchestration tests include shared budget/cancellation/failure,
+inventory omission/duplicate/skip guards, injected simulator identities and a real
+POSIX signal-propagation method. Windows13pass/1POSIXskip is not simctl/macOS proof.
+Top-level test receipts/logs are retained before temporary fixture cleanup.
 
 1. Run `swift test --package-path Packages/LiftingCore`: fixture cases and 120 deterministic small-inventory comparisons against exhaustive full count-vector enumeration, plus invalid inputs/decoding/selection/cap cases.
 2. Generate the project, compile the app, run its scheme tests, including PowerliftingAppTests and the package tests. Resolve warnings that expose isolation, resources, test-host or package/scheme problems. New application test sources have not been generated/compiled/run in Windows.

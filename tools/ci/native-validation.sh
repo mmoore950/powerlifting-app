@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 output="$PWD/artifacts/native-ci"
 mkdir -p "$output"
-phase="${1:?Expected setup/core/http-setup/http-contract/prepare/build/test/screenshots/summary}"
+phase="${1:?Expected setup/core/http-setup/http-contract/prepare/build/test/screenshots/cleanup/summary}"
 if [[ "$phase" != summary ]]; then
   # pipefail propagates command failures; logs survive ordinary step failures.
   exec > >(tee "$output/$phase.log") 2>&1
@@ -21,6 +21,7 @@ case "$phase" in
     python3 --version
     # Actual POSIX child/group/cancellation checks run on this macOS host.
     SUPERVISOR_TEST_EVIDENCE_DIR="$output" python3 tools/ci/test-supervise-process.py
+    ORCHESTRATION_TEST_EVIDENCE_DIR="$output" python3 tools/ci/test-native-orchestration.py
     tool_dir="${RUNNER_TEMP:?Hosted runner temp directory required}/powerlifting-xcodegen"
     mkdir -p "$tool_dir"
     curl --fail --location --max-time 120 --retry 2 \
@@ -86,20 +87,14 @@ with open(sys.argv[1], encoding="utf-8") as stream:
 with open(sys.argv[2], "a", encoding="utf-8") as stream:
     stream.write(f"simulator_id={selected['udid']}\n")
 PY
+    python3 tools/ci/owned_ui_simulator.py create --output "$output"
     ;;
-  build|test)
+  build)
     : "${SIMULATOR_ID:?Simulator selection missing}"
-    if [[ "$phase" == build ]]; then
-      action=build-for-testing
-      deadline=440
-    else
-      action=test-without-building
-      deadline=560
-    fi
     # Internal deadline leaves 40s before the unchanged 8/10min step bounds.
     # TERM grace + KILL/group observation + direct-child wait are bounded to 15s.
     # A single destination; no signing credentials, accounts or device provisioning.
-    python3 tools/ci/supervise-process.py --timeout "$deadline" \
+    python3 tools/ci/supervise-process.py --timeout 440 \
       --term-grace 5 --kill-wait 5 --receipt "$output/$phase.process.json" -- \
       xcodebuild -project PowerliftingApp.xcodeproj -scheme PowerliftingApp \
       -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
@@ -108,21 +103,32 @@ PY
       -resultBundlePath "$output/$phase.xcresult" \
       -parallel-testing-enabled NO \
       -maximum-concurrent-test-simulator-destinations 1 \
-      CODE_SIGNING_ALLOWED=NO "$action"
+      CODE_SIGNING_ALLOWED=NO build-for-testing
+    ;;
+  test)
+    python3 tools/ci/native-test-phases.py --output "$output" \
+      --derived "${RUNNER_TEMP:?}/powerlifting-derived-data" \
+      --selected "$output/selected-simulator.json" --owned-ui "$output/owned-ui-simulator.json"
     ;;
   screenshots)
-    # Keep successful UI-test attachments as ordinary files for visual review.
-    # This runs only after test success; failed runs still preserve test.xcresult.
-    xcrun xcresulttool export attachments --path "$output/test.xcresult" \
-      --output-path "$output/screenshots"
-    python3 tools/ci/check-ui-attachments.py "$output/screenshots"
+    # Both successful result bundles are exported independently. Failed tests
+    # retain their available xcresults without fabricating a passed export gate.
+    xcrun xcresulttool export attachments --path "$output/test-ui.xcresult" \
+      --output-path "$output/screenshots/ui"
+    python3 tools/ci/check-ui-attachments.py "$output/screenshots/ui"
+    xcrun xcresulttool export attachments --path "$output/test-unit.xcresult" \
+      --output-path "$output/screenshots/unit"
+    test -f "$output/screenshots/unit/manifest.json"
+    ;;
+  cleanup)
+    python3 tools/ci/owned_ui_simulator.py cleanup --output "$output"
     ;;
   summary)
     {
       printf '## Native validation diagnostics\n\n'
       printf 'Runner label: `macos-15-intel`; actual versions are in setup.log.\n\n'
       printf 'Revision: `%s`\n\n' "$(git rev-parse HEAD)"
-      for checked_phase in setup core http-setup http-contract prepare build test screenshots; do
+      for checked_phase in setup core http-setup http-contract prepare build test test-ui test-unit screenshots cleanup; do
         if [[ -f "$output/$checked_phase.exit-code" ]]; then
           printf -- '- %s exit code: %s\n' "$checked_phase" "$(cat "$output/$checked_phase.exit-code")"
         else

@@ -101,8 +101,9 @@ Preserve both result bundles and raw logs in the existing full artifact; plain
 diagnostics include both receipts and selected/owned simulator records. Update the
 summary to show each phase and aggregate status. Do not report the full scheme
 passed unless their union contains all expected tests without unexpected skips,
-duplicates or failures: current source42 ordinary core+19app-host+1UI, with the
-known opt-in HTTP skip and independent actual HTTP contract gate retained.
+duplicates or failures: current source42 ordinary core+19app-host+1UI. The HTTP
+method is macOS-only/absent on iOS (no expected iOS skip); macOS opt-in skip and
+independent actual HTTP contract gate remain separate and retained.
 
 After successful aggregate tests, export attachments from BOTH bundles into
 separate directories:
