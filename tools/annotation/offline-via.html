@@ -423,7 +423,7 @@ ul.region_shape .selected { fill:#ffffff; stroke:#ff0000; }
 #hub_frame {font-weight:600}
 </style>
 <section id="hub_panel" aria-label="Offline hub annotation">
-<strong>Local hub annotation · development frames</strong>
+<strong>Local hub annotation · check producer before scoring</strong>
 <div>Click the near-side hub only when visible. Drag a point to correct it, or clear and click again. Save a draft before closing.</div>
 <label>Load frame bundle <input id="hub_bundle" type="file" accept=".json"></label>
 <label>Reload saved draft <input id="hub_draft" type="file" accept=".json"></label>
@@ -10992,6 +10992,42 @@ function parseStrictJSON(text) {
   };walk();return value;
 }
 
+// Shared source contract for Node validation and the embedded offline panel.
+// UUIDs identify a writer session; they are not a signature authenticating origin.
+function validateNativeContract(ledger) {
+  const require=(ok,message)=>{if(!ok)throw Error(message);};
+  const keys=(o,k)=>require(o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).sort().join('|')===k.toSorted().join('|'),'Unexpected native producer fields');
+  const same=(a,b)=>a?.value===b?.value&&a?.timescale===b?.timescale&&a?.epoch===b?.epoch;
+  keys(ledger,['schemaVersion','purpose','nativeParityVerified','decoder','clip','frames','association']);
+  require(ledger.schemaVersion===1&&ledger.purpose==='native-analysis'&&ledger.nativeParityVerified===true,'Invalid native producer purpose');
+  const d=ledger.decoder;
+  keys(d,['name','version','transform','aperture','scale','tolerance','frameSource']);
+  require(d.name==='AVAssetImageGenerator'&&typeof d.version==='string'&&d.version.length>0&&d.version.length<=4096&&
+    d.transform==='preferred-track-transform'&&d.aperture==='clean-aperture'&&d.scale==='maximum-1024x1024'&&
+    d.tolerance==='zero'&&d.frameSource==='same-native-analysis','Invalid native decoder provenance');
+  const a=ledger.association;
+  keys(a,['analysisID','captureSessionID','predictionSHA256','modelID','mode','acceptedTimestamps','rangeStart','rangeEnd']);
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  require(uuid.test(a.analysisID)&&uuid.test(a.captureSessionID)&&/^[a-f0-9]{64}$/.test(a.predictionSHA256),'Invalid native association identity');
+  require(typeof a.modelID==='string'&&a.modelID.trim().length>0&&Array.from(a.modelID).length<=200&&!a.modelID.includes('\0')&&['automatic','manual-vision'].includes(a.mode),'Invalid native association model/mode');
+  require(Number.isFinite(a.rangeStart)&&Number.isFinite(a.rangeEnd)&&a.rangeStart>=0&&a.rangeEnd>a.rangeStart&&a.rangeEnd<=1800&&a.rangeEnd-a.rangeStart<=1,'Invalid native capture range');
+  require(Array.isArray(ledger.frames)&&ledger.frames.length>0&&ledger.frames.length<=16&&Array.isArray(a.acceptedTimestamps)&&a.acceptedTimestamps.length===ledger.frames.length,'Invalid native frame count');
+  require([ledger.clip?.uprightWidth,ledger.clip?.uprightHeight].every(n=>Number.isInteger(n)&&n>0&&n<=1024),'Invalid native geometry');
+  let previous=null;
+  for(let i=0;i<ledger.frames.length;i++) {
+    const f=ledger.frames[i],t=f.timestamp;
+    require(f.id===`frame-${String(i).padStart(6,'0')}`&&f.filename===f.id+'.png','Invalid native frame sequence');
+    keys(t,['value','timescale','epoch']);keys(a.acceptedTimestamps[i],['value','timescale','epoch']);
+    require(typeof t.value==='string'&&/^(0|[1-9][0-9]*)$/.test(t.value)&&Number.isInteger(t.timescale)&&t.timescale>0&&t.timescale<=2147483647&&t.epoch===0&&same(t,a.acceptedTimestamps[i]),'Changed native accepted timestamp components');
+    const value=BigInt(t.value),scale=BigInt(t.timescale);
+    require(value<=1800n*scale&&(!previous||value*BigInt(previous.timescale)>BigInt(previous.value)*scale),'Invalid native timestamp ordering/range');
+    const seconds=Number(value)/t.timescale;
+    require(seconds>=a.rangeStart-1e-9&&seconds<=a.rangeEnd+1e-9,'Native timestamp outside selected range');
+    previous=t;
+  }
+  return ledger;
+}
+
 // Project-specific derivative wrapper. VIA's original pixel point editor remains authoritative.
 // No media upload, remote import, background persistence or timestamp Number conversion.
 (() => {
@@ -11016,7 +11052,8 @@ function parseStrictJSON(text) {
   function sync() {
     const m=current();if(!m)return;
     const f=bundle.ledger.frames.find(f=>f.id===_via_image_id),a=m.file_attributes;
-    el('hub_frame').textContent=`${bundle.ledger.clip.id} · ${_via_image_index+1}/${bundle.ledger.frames.length} · ${f.id} · actual PTS ${f.timestamp.value}/${f.timestamp.timescale} (epoch ${f.timestamp.epoch}) · ${a.reviewStatus}`;
+    const producer=bundle.ledger.purpose==='native-analysis'?'native analysis':'PyAV development';
+    el('hub_frame').textContent=`${bundle.ledger.clip.id} · ${producer} · ${_via_image_index+1}/${bundle.ledger.frames.length} · ${f.id} · actual PTS ${f.timestamp.value}/${f.timestamp.timescale} (epoch ${f.timestamp.epoch}) · ${a.reviewStatus}`;
     el('hub_visibility').value=a.visibility;el('hub_uncertainty').value=a.uncertaintyPixels??'';
     el('hub_uncertainty').disabled=a.visibility!=='visible';lastID=_via_image_id;
   }
@@ -11042,11 +11079,12 @@ function parseStrictJSON(text) {
     assert(file.size<=48*1024*1024,'Bundle exceeds 48 MiB');
     assert(!dirty,'Save your current draft before loading another bundle');
     const b=parseStrictJSON(await file.text()),l=b.ledger;
-    assert(l?.schemaVersion===1&&l.purpose==='development-only'&&l.nativeParityVerified===false,'Only unverified development frame bundles supported');
+    if(l?.purpose==='native-analysis')validateNativeContract(l);
+    else assert(l?.schemaVersion===1&&l.purpose==='development-only'&&l.nativeParityVerified===false&&l.decoder?.name==='PyAV','Invalid development frame producer');
     assert(/^[a-f0-9]{64}$/.test(b.ledgerSha256)&&Array.isArray(l.frames)&&l.frames.length>0&&l.frames.length<=450,'Invalid bundle identity/count');
     assert(typeof b.ledgerText==='string'&&await sha(new TextEncoder().encode(b.ledgerText))===b.ledgerSha256&&JSON.stringify(parseStrictJSON(b.ledgerText))===JSON.stringify(l),'Changed bundle ledger bytes/content');
     assert([l.clip.uprightWidth,l.clip.uprightHeight].every(n=>Number.isInteger(n)&&n>0&&n<=8192),'Invalid image geometry');
-    const ids=new Set(),times=new Set();let previous=null;
+    const ids=new Set();let previous=null,totalBytes=0;
     for(const f of l.frames) {
       assert(/^frame-\d{6}$/.test(f.id)&&!ids.has(f.id)&&f.filename===f.id+'.png','Duplicate/foreign frame ID');ids.add(f.id);
       const t=f.timestamp;
@@ -11055,6 +11093,7 @@ function parseStrictJSON(text) {
       assert(!previous||value*BigInt(previous.timescale)>BigInt(previous.value)*BigInt(t.timescale),'Duplicate/unordered PTS');previous=t;
       const data=b.images[f.id];assert(typeof data==='string'&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(data),'Only embedded PNG images allowed');
       const bytes=Uint8Array.from(atob(data.split(',')[1]),x=>x.charCodeAt(0));
+      totalBytes+=bytes.length;assert(totalBytes<=32*1024*1024,'Frame payload exceeds 32 MiB');
       assert(await sha(bytes)===f.sha256,'Image hash changed');
       const image=new Image();image.src=data;await image.decode();assert(image.naturalWidth===l.clip.uprightWidth&&image.naturalHeight===l.clip.uprightHeight,'Image geometry changed');
     }
@@ -11070,7 +11109,9 @@ function parseStrictJSON(text) {
       _via_img_metadata[id].file_attributes={reviewStatus:'unreviewed',visibility:'',uncertaintyPixels:null};
     }
     select_region_shape(VIA_REGION_SHAPE.POINT);update_img_fn_list();_via_show_img(0);
-    dirty=false;status('Loaded. Native image/time parity is unverified. Save drafts locally; adapter verifies the separate ledger and media.');
+    dirty=false;status(l.purpose==='native-analysis'?
+      `Loaded native producer contract. Analysis ${l.association.analysisID}; session ${l.association.captureSessionID}. Adapter must verify prediction.json and media before scoring. No accuracy result yet.`:
+      'Loaded. Native image/time parity is unverified. Save drafts locally; adapter verifies the separate ledger and media.');
     observation('Local bundle imported; embedded images only');
   }));
   el('hub_draft').addEventListener('change',guard(async event=>{

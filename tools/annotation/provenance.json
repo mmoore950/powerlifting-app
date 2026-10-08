@@ -2,7 +2,7 @@
   "upstreamVersion": "2.0.12",
   "upstreamURL": "https://www.robots.ox.ac.uk/~vgg/software/via/via.html",
   "upstreamSHA256": "a225d22d89fd5b901769670fb94d4e117543d748c1c2dd8cf2fa7a4777f08322",
-  "derivativeSHA256": "aeca0a68126509ee0bfd5c6f0efaa044646971c0c72dde0e15d31be7ea6d1def",
+  "derivativeSHA256": "fe4812fecb47c27fd23058038679b76dd2a162611ef41efd734fa5dc10c2b051",
   "disabledFunctions": [
     "project_file_add_url_with_input",
     "project_file_add_url_input_done",
@@ -24,7 +24,8 @@
     "Disabled upstream shortcuts to hidden dialogs",
     "Removed inherited trailing whitespace",
     "Added restrictive CSP",
-    "Added explicit local frame/draft labeling controls"
+    "Added explicit local frame/draft labeling controls",
+    "Added shared native producer contract validation"
   ],
   "license": "BSD-2-Clause; full upstream notice retained in both HTML files"
 }

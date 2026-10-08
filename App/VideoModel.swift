@@ -23,6 +23,8 @@ final class VideoModel: ObservableObject {
     private let analyzer = BarAnalysisService()
     private let predictionExporter = BarPredictionExporter()
     private var analysisTask: Task<Void, Never>?
+    private var captureTask: Task<URL, Error>?
+    private var captureAuthorization: BarCaptureAuthorization?
     private var analysisGeneration = 0
     private var observerCleanup: (@MainActor @Sendable () -> Void)?
     private var generation = 0
@@ -35,11 +37,13 @@ final class VideoModel: ObservableObject {
 
     @discardableResult
     func importFile(_ url: URL, temporary: Bool = false) -> Task<Void, Never> {
+        // Revoke publication before changing the clip generation.
+        cancelProcessing()
         generation += 1; let request = generation
         importTask?.cancel()
         pause()
-        cancelProcessing()
         let previousAnalysis = analysisTask
+        let previousCapture = captureTask
         importing = true; error = nil
         let task = Task {
             defer {
@@ -48,6 +52,7 @@ final class VideoModel: ObservableObject {
             }
             do {
                 await previousAnalysis?.value
+                _ = await previousCapture?.result
                 try Task.checkCancellation()
                 let imported = try await store.ingest(url)
                 guard request == generation, !Task.isCancelled else { try? await store.remove(imported.url); return }
@@ -156,8 +161,69 @@ final class VideoModel: ObservableObject {
         }
     }
     func cancelProcessing() {
+        captureAuthorization?.invalidate()
         if processing { cancelling = true; processingStatus = "Cancelling and releasing frame resources" }
         analysisTask?.cancel()
+        captureTask?.cancel()
+    }
+    /// Explicit developer-local operation; no product button or implicit destination.
+    /// The same analysis result produces both the PNG ledger and prediction JSON.
+    @discardableResult
+    func captureAnnotationBundle(context: BarFrameBundleContext, destination: URL,
+                                 mode: BarAnalysisMode = .automatic) -> Task<URL, Error> {
+        guard !processing, !importing, let video, end - start <= 1 else {
+            return Task { throw BarFrameBundleError.state }
+        }
+        let seed = trace?.samples.first { $0.kind == .manualReference && abs($0.seconds-start) <= 0.05 }?.point
+        if mode == .manual, seed == nil { return Task { throw BarAnalysisError.manualPoint } }
+        pause(); error = nil; processing = true; cancelling = false; processingProgress = 0
+        processingStatus = "Preparing native annotation frames"
+        analysisGeneration += 1; let run = analysisGeneration, clipGeneration = generation
+        let trimStart = start, trimEnd = end
+        let authorization = BarCaptureAuthorization(); captureAuthorization = authorization
+        let task = Task<URL, Error> {
+            defer {
+                if run == analysisGeneration {
+                    processing = false; cancelling = false; captureTask = nil; captureAuthorization = nil
+                }
+            }
+            var activeExporter: BarFrameBundleExporter?
+            do {
+                let exporter = try BarFrameBundleExporter(mediaURL: video.url, context: context,
+                    destination: destination, authorization: authorization)
+                activeExporter = exporter
+                return try await withTaskCancellationHandler {
+                    let sink = try await exporter.prepare()
+                    let result = try await analyzer.analyze(url: video.url, start: trimStart, end: trimEnd, mode: mode,
+                        manualPoint: seed, capture: sink) { [weak self] update in
+                        Task { @MainActor [weak self] in
+                            guard let self, self.analysisGeneration == run, self.generation == clipGeneration, self.processing, !self.cancelling else { return }
+                            self.processingProgress = update.fraction; self.processingStatus = update.reason
+                        }
+                    }
+                    guard !Task.isCancelled, generation == clipGeneration, analysisGeneration == run,
+                          self.video?.url == video.url else { throw BarFrameBundleError.revoked }
+                    let output = try await exporter.finish(result: result)
+                    // Publication has already linearized against revocation. A later
+                    // clip change cannot relabel the historical bundle or update UI.
+                    if !Task.isCancelled, !cancelling, generation == clipGeneration, analysisGeneration == run, self.video?.url == video.url {
+                        trace = result.trace; analysisResult = result; processingProgress = 1
+                        processingStatus = "Native annotation bundle saved locally; labeling and evaluation still required"
+                    }
+                    return output
+                } onCancel: { authorization.invalidate() }
+            } catch {
+                await activeExporter?.abort()
+                authorization.invalidate()
+                if run == analysisGeneration, clipGeneration == generation {
+                    processingStatus = Task.isCancelled ? "Native annotation capture cancelled" : "Native annotation capture failed; previous result retained"
+                    if !Task.isCancelled { self.error = error.localizedDescription }
+                }
+                throw error
+            }
+        }
+        captureTask = task
+        return task
     }
     /// Developer-local diagnostics hook. Caller supplies manifest identity and chooses local storage.
     /// Returning Data avoids publishing an obsolete result after a clip change or clear operation.
@@ -176,8 +242,10 @@ final class VideoModel: ObservableObject {
         catch { self.error = "Removing managed copies failed: \(error.localizedDescription)" }
     }
     func removeVideo() async {
+        cancelProcessing()
         generation += 1; importTask?.cancel(); importing = false
-        cancelProcessing(); await analysisTask?.value
+        await analysisTask?.value
+        _ = await captureTask?.result
         let previous = video?.url
         detachPlayer(); video = nil; trace = nil; analysisResult = nil; seconds = 0; start = 0; end = 0
         if let previous {
@@ -199,6 +267,7 @@ final class VideoModel: ObservableObject {
     deinit {
         importTask?.cancel()
         analysisTask?.cancel()
+        captureAuthorization?.invalidate(); captureTask?.cancel()
         // Deinit may run off the main actor. Retain only the Sendable cleanup closure,
         // which owns the matching player/token and performs removal on the main actor.
         if let observerCleanup { Task { @MainActor in observerCleanup() } }

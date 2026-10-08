@@ -1,6 +1,6 @@
 # Authoritative native annotation frames: source-only scope
 
-October 8, 2026. This is the preauthorized source audit/proposal after the offline annotation checkpoint. **No native implementation, media upload, workflow change or CI dispatch was performed.** The offline browser acceptance gate remains pending independently.
+October 8, 2026. This is the accepted preimplementation audit/proposal, retained as the scope record. Implementation source and actual verification are now recorded in [status.md](status.md); developer invocation and native bundle fields are in [local-annotation-guide.md](local-annotation-guide.md). No media upload, workflow change or CI dispatch was performed for this source checkpoint. Apple execution and offline browser acceptance remain pending independently.
 
 ## Smallest authoritative capture point
 

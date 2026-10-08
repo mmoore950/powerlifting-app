@@ -117,12 +117,15 @@ final class VideoMediaLifecycleTests: XCTestCase {
 /// Test-only encoder. Mutable state and writer operations are confined to one serial queue.
 /// The unchecked conformance permits AVFoundation callbacks to retain this queue-owned state;
 /// no mutable field is accessed from the calling task or the writer completion queue.
-private final class SyntheticMovieWriter: @unchecked Sendable {
+final class SyntheticMovieWriter: @unchecked Sendable {
     private let queue = DispatchQueue(label: "synthetic-movie-writer")
     private let writer: AVAssetWriter
     private let input: AVAssetWriterInput
     private let adaptor: AVAssetWriterInputPixelBufferAdaptor
     private let destination: URL
+    private let width: Int, height: Int, frameCount: Int
+    private let timescale: Int32
+    private let asymmetric: Bool
     private var nextFrame = 0
     private var completed = false
     private var completion: (@Sendable (Result<Void, Error>) -> Void)?
@@ -130,8 +133,10 @@ private final class SyntheticMovieWriter: @unchecked Sendable {
     private var phase = "not started"
     private var startedAt = 0.0
 
-    static func write(to url: URL) async throws {
-        let encoder = try SyntheticMovieWriter(destination: url)
+    static func write(to url: URL, width: Int = 64, height: Int = 48, frameCount: Int = 3,
+                      timescale: Int32 = 10, rotated: Bool = true, asymmetric: Bool = false) async throws {
+        let encoder = try SyntheticMovieWriter(destination: url, width: width, height: height,
+            frameCount: frameCount, timescale: timescale, rotated: rotated, asymmetric: asymmetric)
         // Keep the encoder alive across suspension; callbacks need not retain it in a cycle.
         defer { withExtendedLifetime(encoder) {} }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -139,16 +144,22 @@ private final class SyntheticMovieWriter: @unchecked Sendable {
         }
     }
 
-    private init(destination: URL) throws {
+    private init(destination: URL, width: Int, height: Int, frameCount: Int, timescale: Int32,
+                 rotated: Bool, asymmetric: Bool) throws {
+        guard (16...1920).contains(width), (16...1080).contains(height), (1...30).contains(frameCount), timescale > 0 else {
+            throw NSError(domain: "SyntheticMovieWriter", code: 1)
+        }
         self.destination = destination
+        self.width = width; self.height = height; self.frameCount = frameCount
+        self.timescale = timescale; self.asymmetric = asymmetric
         writer = try AVAssetWriter(outputURL: destination, fileType: .mov)
         input = AVAssetWriterInput(mediaType: .video, outputSettings: [
-            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 64, AVVideoHeightKey: 48])
+            AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: width, AVVideoHeightKey: height])
         input.expectsMediaDataInRealTime = false
-        input.transform = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 48, ty: 0)
+        if rotated { input.transform = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: CGFloat(height), ty: 0) }
         adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-            kCVPixelBufferWidthKey as String: 64, kCVPixelBufferHeightKey as String: 48])
+            kCVPixelBufferWidthKey as String: width, kCVPixelBufferHeightKey as String: height])
         guard writer.canAdd(input) else { throw failure("Encoder cannot add video input") }
         writer.add(input)
     }
@@ -164,7 +175,7 @@ private final class SyntheticMovieWriter: @unchecked Sendable {
             let deadline = DispatchWorkItem { [weak self] in
                 guard let self, !self.completed else { return }
                 let elapsed = ProcessInfo.processInfo.systemUptime - self.startedAt
-                let diagnostic = "Synthetic encoder exceeded 30-second budget: phase=\(self.phase), frames=\(self.nextFrame)/3, status=\(self.writer.status.rawValue), elapsed=\(elapsed), writerError=\(String(describing: self.writer.error))"
+                let diagnostic = "Synthetic encoder exceeded 30-second budget: phase=\(self.phase), frames=\(self.nextFrame)/\(self.frameCount), status=\(self.writer.status.rawValue), elapsed=\(elapsed), writerError=\(String(describing: self.writer.error))"
                 self.writer.cancelWriting()
                 self.finish(.failure(self.failure(diagnostic)))
             }
@@ -175,27 +186,34 @@ private final class SyntheticMovieWriter: @unchecked Sendable {
     }
 
     private func appendReadyFrames() {
-        guard !completed, nextFrame < 3 else { return }
+        guard !completed, nextFrame < frameCount else { return }
         do {
-            while input.isReadyForMoreMediaData, nextFrame < 3 {
+            while input.isReadyForMoreMediaData, nextFrame < frameCount {
                 phase = "appending frame \(nextFrame)"
                 var buffer: CVPixelBuffer?
-                let status = CVPixelBufferCreate(kCFAllocatorDefault, 64, 48, kCVPixelFormatType_32BGRA, nil, &buffer)
+                let status = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, nil, &buffer)
                 guard status == kCVReturnSuccess, let buffer else { throw failure("Pixel buffer creation failed") }
                 CVPixelBufferLockBaseAddress(buffer, [])
                 guard let base = CVPixelBufferGetBaseAddress(buffer) else {
                     CVPixelBufferUnlockBaseAddress(buffer, []); throw failure("Pixel buffer has no base address")
                 }
-                memset(base, Int32(64 + nextFrame * 32), CVPixelBufferGetBytesPerRow(buffer) * 48)
+                memset(base, Int32((64 + nextFrame * 32) % 256), CVPixelBufferGetBytesPerRow(buffer) * height)
+                if asymmetric {
+                    let pixels = base.assumingMemoryBound(to: UInt8.self), rowBytes = CVPixelBufferGetBytesPerRow(buffer)
+                    for y in 0..<height/2 { for x in 0..<width/2 {
+                        let offset = y * rowBytes + x * 4
+                        pixels[offset] = 220; pixels[offset+1] = 30; pixels[offset+2] = 100; pixels[offset+3] = 255
+                    } }
+                }
                 CVPixelBufferUnlockBaseAddress(buffer, [])
-                guard adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(nextFrame), timescale: 10)) else {
+                guard adaptor.append(buffer, withPresentationTime: CMTime(value: Int64(nextFrame), timescale: timescale)) else {
                     throw writer.error ?? failure("Frame append failed")
                 }
                 nextFrame += 1
             }
-            if nextFrame == 3 {
+            if nextFrame == frameCount {
                 phase = "finishing writer"
-                writer.endSession(atSourceTime: CMTime(value: 3, timescale: 10))
+                writer.endSession(atSourceTime: CMTime(value: Int64(frameCount), timescale: timescale))
                 input.markAsFinished()
                 writer.finishWriting { [weak self] in
                     guard let self else { return }

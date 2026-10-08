@@ -22,7 +22,8 @@
   function sync() {
     const m=current();if(!m)return;
     const f=bundle.ledger.frames.find(f=>f.id===_via_image_id),a=m.file_attributes;
-    el('hub_frame').textContent=`${bundle.ledger.clip.id} · ${_via_image_index+1}/${bundle.ledger.frames.length} · ${f.id} · actual PTS ${f.timestamp.value}/${f.timestamp.timescale} (epoch ${f.timestamp.epoch}) · ${a.reviewStatus}`;
+    const producer=bundle.ledger.purpose==='native-analysis'?'native analysis':'PyAV development';
+    el('hub_frame').textContent=`${bundle.ledger.clip.id} · ${producer} · ${_via_image_index+1}/${bundle.ledger.frames.length} · ${f.id} · actual PTS ${f.timestamp.value}/${f.timestamp.timescale} (epoch ${f.timestamp.epoch}) · ${a.reviewStatus}`;
     el('hub_visibility').value=a.visibility;el('hub_uncertainty').value=a.uncertaintyPixels??'';
     el('hub_uncertainty').disabled=a.visibility!=='visible';lastID=_via_image_id;
   }
@@ -48,11 +49,12 @@
     assert(file.size<=48*1024*1024,'Bundle exceeds 48 MiB');
     assert(!dirty,'Save your current draft before loading another bundle');
     const b=parseStrictJSON(await file.text()),l=b.ledger;
-    assert(l?.schemaVersion===1&&l.purpose==='development-only'&&l.nativeParityVerified===false,'Only unverified development frame bundles supported');
+    if(l?.purpose==='native-analysis')validateNativeContract(l);
+    else assert(l?.schemaVersion===1&&l.purpose==='development-only'&&l.nativeParityVerified===false&&l.decoder?.name==='PyAV','Invalid development frame producer');
     assert(/^[a-f0-9]{64}$/.test(b.ledgerSha256)&&Array.isArray(l.frames)&&l.frames.length>0&&l.frames.length<=450,'Invalid bundle identity/count');
     assert(typeof b.ledgerText==='string'&&await sha(new TextEncoder().encode(b.ledgerText))===b.ledgerSha256&&JSON.stringify(parseStrictJSON(b.ledgerText))===JSON.stringify(l),'Changed bundle ledger bytes/content');
     assert([l.clip.uprightWidth,l.clip.uprightHeight].every(n=>Number.isInteger(n)&&n>0&&n<=8192),'Invalid image geometry');
-    const ids=new Set(),times=new Set();let previous=null;
+    const ids=new Set();let previous=null,totalBytes=0;
     for(const f of l.frames) {
       assert(/^frame-\d{6}$/.test(f.id)&&!ids.has(f.id)&&f.filename===f.id+'.png','Duplicate/foreign frame ID');ids.add(f.id);
       const t=f.timestamp;
@@ -61,6 +63,7 @@
       assert(!previous||value*BigInt(previous.timescale)>BigInt(previous.value)*BigInt(t.timescale),'Duplicate/unordered PTS');previous=t;
       const data=b.images[f.id];assert(typeof data==='string'&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(data),'Only embedded PNG images allowed');
       const bytes=Uint8Array.from(atob(data.split(',')[1]),x=>x.charCodeAt(0));
+      totalBytes+=bytes.length;assert(totalBytes<=32*1024*1024,'Frame payload exceeds 32 MiB');
       assert(await sha(bytes)===f.sha256,'Image hash changed');
       const image=new Image();image.src=data;await image.decode();assert(image.naturalWidth===l.clip.uprightWidth&&image.naturalHeight===l.clip.uprightHeight,'Image geometry changed');
     }
@@ -76,7 +79,9 @@
       _via_img_metadata[id].file_attributes={reviewStatus:'unreviewed',visibility:'',uncertaintyPixels:null};
     }
     select_region_shape(VIA_REGION_SHAPE.POINT);update_img_fn_list();_via_show_img(0);
-    dirty=false;status('Loaded. Native image/time parity is unverified. Save drafts locally; adapter verifies the separate ledger and media.');
+    dirty=false;status(l.purpose==='native-analysis'?
+      `Loaded native producer contract. Analysis ${l.association.analysisID}; session ${l.association.captureSessionID}. Adapter must verify prediction.json and media before scoring. No accuracy result yet.`:
+      'Loaded. Native image/time parity is unverified. Save drafts locally; adapter verifies the separate ledger and media.');
     observation('Local bundle imported; embedded images only');
   }));
   el('hub_draft').addEventListener('change',guard(async event=>{

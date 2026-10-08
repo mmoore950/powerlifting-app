@@ -1,19 +1,23 @@
 import {readFile,writeFile,realpath,stat} from 'node:fs/promises';
-import {createReadStream} from 'node:fs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {validateVideoManifest,orderedTimestamps} from '../validate-video-manifest.mjs';
 import {parseStrictJSON} from './strict_json.mjs';
+import {validateNativeContract} from './native_contract.mjs';
+import {validatePredictions,verifyMedia} from '../score-video-traces.mjs';
 export {parseStrictJSON} from './strict_json.mjs';
 
 export const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 const require=(ok,message)=>{if(!ok)throw Error(message);};
 const keys=(o,expected,label)=>require(o&&typeof o==='object'&&!Array.isArray(o)&&Object.keys(o).sort().join('|')===expected.toSorted().join('|'),`Unexpected ${label} fields`);
 export function validateLedger(ledger) {
-  keys(ledger,['schemaVersion','purpose','nativeParityVerified','decoder','clip','frames'],'ledger');
-  require(ledger.schemaVersion===1&&ledger.purpose==='development-only'&&ledger.nativeParityVerified===false,'Only explicitly unverified development bundles supported');
-  require(ledger.decoder?.name==='PyAV'&&typeof ledger.decoder.version==='string','Missing decoder provenance');
+  if(ledger?.purpose==='native-analysis')validateNativeContract(ledger);
+  else {
+    keys(ledger,['schemaVersion','purpose','nativeParityVerified','decoder','clip','frames'],'ledger');
+    require(ledger.schemaVersion===1&&ledger.purpose==='development-only'&&ledger.nativeParityVerified===false,'Only explicitly unverified development bundles supported');
+    require(ledger.decoder?.name==='PyAV'&&typeof ledger.decoder.version==='string','Missing decoder provenance');
+  }
   validateVideoManifest({schemaVersion:1,coordinateSpace:'upright-normalized-top-left',clips:[{...ledger.clip,annotations:[]}]});
   require(Array.isArray(ledger.frames)&&ledger.frames.length>0&&ledger.frames.length<=450,'Invalid frame bound');
   const ids=new Set(),names=new Set();
@@ -29,9 +33,28 @@ export function validateLedger(ledger) {
   return ledger;
 }
 
-export function adaptLabels(ledger,ledgerHash,labels,{purpose='development',existing={schemaVersion:1,coordinateSpace:'upright-normalized-top-left',clips:[]}}={}) {
+export function verifyNativePrediction(ledger,bytes) {
   validateLedger(ledger);
-  require(purpose==='development','PyAV frames are not native-parity verified: native scoring refused');
+  require(ledger.purpose==='native-analysis'&&bytes&&bytes.length>0&&bytes.length<=1024*1024,'Native prediction bytes required within bound');
+  require(digest(bytes)===ledger.association.predictionSHA256,'Native prediction hash changed');
+  const predictions=parseStrictJSON(bytes.toString('utf8'));
+  validatePredictions(predictions,{clips:[{...ledger.clip,annotations:[]}]});
+  const a=ledger.association,run=predictions.runs[0];
+  require(predictions.runs.length===1&&predictions.modelID===a.modelID&&run.mode===a.mode&&run.samples.length===ledger.frames.length,'Native prediction association mismatch');
+  for(let i=0;i<run.samples.length;i++) {
+    const t=run.samples[i].timestamp,f=ledger.frames[i].timestamp;
+    require(t.value===f.value&&t.timescale===f.timescale&&t.epoch===f.epoch,'Native prediction exact timestamp mismatch');
+  }
+  return predictions;
+}
+
+export function adaptLabels(ledger,ledgerHash,labels,{purpose='development',predictionBytes,existing={schemaVersion:1,coordinateSpace:'upright-normalized-top-left',clips:[]}}={}) {
+  validateLedger(ledger);
+  require(['development','native-scoring'].includes(purpose),'Unknown annotation purpose');
+  if(purpose==='native-scoring') {
+    require(ledger.purpose==='native-analysis','PyAV frames are not native-parity verified: native scoring refused');
+    verifyNativePrediction(ledger,predictionBytes);
+  } else if(ledger.purpose==='native-analysis')verifyNativePrediction(ledger,predictionBytes);
   keys(labels,['schemaVersion','ledgerSha256','viaMetadata'],'label envelope');
   require(labels.schemaVersion===1&&labels.ledgerSha256===ledgerHash,'Foreign/changed authoritative ledger');
   keys(labels.viaMetadata,ledger.frames.map(f=>f.id),'frame metadata');
@@ -71,8 +94,10 @@ export function adaptLabels(ledger,ledgerHash,labels,{purpose='development',exis
   validateVideoManifest(existing);
   validateVideoManifest({...manifest,clips:[...existing.clips,clip]});
   const validation=validateVideoManifest(manifest);
-  return {manifest,report:{...validation,unreviewed,reviewed:annotations.length,purpose:'development-only',nativeParityVerified:false,
-    note:'Decoded raster/time alignment with native output is unverified. This draft is not established native scoring evidence.'}};
+  const native=ledger.purpose==='native-analysis';
+  return {manifest,report:{...validation,unreviewed,reviewed:annotations.length,purpose:native?purpose:'development-only',nativeParityVerified:native,
+    ...(native?{analysisID:ledger.association.analysisID,captureSessionID:ledger.association.captureSessionID,predictionSHA256:ledger.association.predictionSHA256}:{}),
+    note:native?'Native producer contract and prediction association checked. This does not authenticate edited bundles or establish tracking accuracy.':'Decoded raster/time alignment with native output is unverified. This draft is not established native scoring evidence.'}};
 }
 
 async function within(root,relative) {
@@ -82,10 +107,10 @@ async function within(root,relative) {
 }
 export async function verifyAssets(ledger,bundleDir,assetRoot) {
   validateLedger(ledger);
-  const media=await within(assetRoot,ledger.clip.localPath);
-  const info=await stat(media);require(info.isFile()&&info.size>0&&info.size<=512*1024*1024,'Media exceeds file/size bound');
-  const hash=createHash('sha256');for await(const chunk of createReadStream(media))hash.update(chunk);
-  const after=await stat(media);require(info.size===after.size&&info.mtimeMs===after.mtimeMs&&hash.digest('hex')===ledger.clip.sha256,'Media hash changed');
+  const fileLimit=(ledger.purpose==='native-analysis'?500:512)*1024*1024;
+  // Reuse the scorer's streaming byte/count, before/after stat and 60s cancellation policy.
+  try { await verifyMedia({schemaVersion:1,coordinateSpace:'upright-normalized-top-left',clips:[{...ledger.clip,annotations:[]}]},assetRoot,{fileLimit,totalLimit:fileLimit}); }
+  catch(error) { throw Error(`Media hash changed or file policy failed: ${error.message}`); }
   let total=0;
   for(const f of ledger.frames) {
     const filename=await within(bundleDir,'frames/'+f.filename),size=(await stat(filename)).size;
@@ -94,6 +119,11 @@ export async function verifyAssets(ledger,bundleDir,assetRoot) {
     require(bytes.length>=24&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))&&
       bytes.readUInt32BE(16)===ledger.clip.uprightWidth&&bytes.readUInt32BE(20)===ledger.clip.uprightHeight,'PNG geometry differs from ledger');
   }
+  if(ledger.purpose==='native-analysis') {
+    const filename=await within(bundleDir,'prediction.json');
+    require((await stat(filename)).size<=1024*1024,'Native prediction JSON exceeds bound');
+    const bytes=await readFile(filename);verifyNativePrediction(ledger,bytes);return bytes;
+  }
 }
 async function main() {
   const args={};for(let i=2;i<process.argv.length;i+=2){require(/^--[a-z-]+$/.test(process.argv[i])&&process.argv[i+1],'Expected --name value');args[process.argv[i].slice(2)]=process.argv[i+1];}
@@ -101,9 +131,10 @@ async function main() {
   for(const [filename,bound] of [[args.ledger,1024*1024],[args.labels,4*1024*1024],...(args.existing?[[args.existing,32*1024*1024]]:[])])require((await stat(filename)).size<=bound,'JSON exceeds input bound');
   const bytes=await readFile(args.ledger),ledger=validateLedger(parseStrictJSON(bytes.toString('utf8'))),labels=parseStrictJSON(await readFile(args.labels,'utf8'));
   const existing=args.existing?parseStrictJSON(await readFile(args.existing,'utf8')):undefined;
-  const result=adaptLabels(ledger,digest(bytes),labels,{purpose:args.purpose,existing});
-  await verifyAssets(ledger,path.dirname(args.ledger),args['asset-root']);
-  require(args.output.endsWith('.development-draft.json'),'Output must end .development-draft.json to preserve unverified status');
+  const predictionBytes=await verifyAssets(ledger,path.dirname(args.ledger),args['asset-root']);
+  const result=adaptLabels(ledger,digest(bytes),labels,{purpose:args.purpose,existing,predictionBytes});
+  const suffix=args.purpose==='native-scoring'?'.native-reference.json':'.development-draft.json';
+  require(args.output.endsWith(suffix),`Output must end ${suffix}`);
   // Exclusive creation preserves previous exports. Companion report must travel with this draft.
   await writeFile(args.output+'.report.json',JSON.stringify(result.report,null,2)+'\n',{flag:'wx'});
   await writeFile(args.output,JSON.stringify(result.manifest,null,2)+'\n',{flag:'wx'});

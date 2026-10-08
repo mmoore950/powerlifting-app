@@ -23,6 +23,14 @@ struct BarAnalysisResult: Sendable {
     let mode: BarAnalysisMode
     let uprightWidth: Int
     let uprightHeight: Int
+    let analysisID: UUID
+    let captureSessionID: UUID?
+    init(trace: VideoTrace, timestamps: [BarFrameTime], elapsed: Double, gaps: Int, mode: BarAnalysisMode,
+         uprightWidth: Int, uprightHeight: Int, analysisID: UUID = UUID(), captureSessionID: UUID? = nil) {
+        self.trace = trace; self.timestamps = timestamps; self.elapsed = elapsed; self.gaps = gaps; self.mode = mode
+        self.uprightWidth = uprightWidth; self.uprightHeight = uprightHeight
+        self.analysisID = analysisID; self.captureSessionID = captureSessionID
+    }
 }
 enum BarAnalysisError: Error, LocalizedError {
     case busy, range, manualPoint, timestamp, budget, noFrames, geometry
@@ -42,10 +50,15 @@ enum BarAnalysisError: Error, LocalizedError {
 actor BarAnalysisService {
     private var running = false
     func analyze(url: URL, start: Double, end: Double, mode: BarAnalysisMode, manualPoint: VideoPoint?,
+                 capture: BarFrameCaptureSink? = nil,
                  progress: @escaping @Sendable (BarAnalysisProgress) -> Void) async throws -> BarAnalysisResult {
         guard !running else { throw BarAnalysisError.busy }
         guard start.isFinite, end.isFinite, start >= 0, end > start, end - start <= 30 else { throw BarAnalysisError.range }
         if mode == .manual && manualPoint == nil { throw BarAnalysisError.manualPoint }
+        if let capture {
+            guard end - start <= 1, url.standardizedFileURL == capture.mediaURL.standardizedFileURL else { throw BarFrameBundleError.identity }
+        }
+        let analysisID = UUID()
         running = true; defer { running = false }
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
         generator.appliesPreferredTrackTransform = true
@@ -75,6 +88,14 @@ actor BarAnalysisService {
                 } else { uprightWidth = frame.image.width; uprightHeight = frame.image.height }
                 guard let actual = try clock.accept(value: frame.actualTime.value, timescale: frame.actualTime.timescale,
                     epoch: frame.actualTime.epoch) else { continue }
+                if let capture {
+                    let png = try autoreleasepool { try BarFramePNG.encode(frame.image) }
+                    try Task.checkCancellation()
+                    try await capture.receive(BarCapturedFrame(sessionID: capture.sessionID, analysisID: analysisID,
+                        timestamp: BarFrameTime(value: String(frame.actualTime.value), timescale: frame.actualTime.timescale, epoch: frame.actualTime.epoch),
+                        width: frame.image.width, height: frame.image.height, png: png))
+                    try Task.checkCancellation()
+                }
                 let observation: (VideoTraceSample, String) = try autoreleasepool {
                     if mode == .automatic {
                         let features = try ContourFrame.extract(frame.image, cancellation: cancellation)
@@ -116,7 +137,7 @@ actor BarAnalysisService {
             guard !samples.isEmpty, let uprightWidth, let uprightHeight else { throw BarAnalysisError.noFrames }
             return BarAnalysisResult(trace: try VideoTrace(start: start, end: end, samples: samples), timestamps: timestamps,
                 elapsed: ProcessInfo.processInfo.systemUptime - began, gaps: gaps, mode: mode,
-                uprightWidth: uprightWidth, uprightHeight: uprightHeight)
+                uprightWidth: uprightWidth, uprightHeight: uprightHeight, analysisID: analysisID, captureSessionID: capture?.sessionID)
         } onCancel: { cancellation.cancel() }
     }
 }
