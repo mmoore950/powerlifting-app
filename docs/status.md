@@ -1,5 +1,22 @@
 # Worker status
 
+## Generated walkthrough checkpoint — October 8, 2026, 07:07 ET
+
+- User-facing generated-annotation-walkthrough.md reuses the existing3frame
+  fixture/drafts and earlier actual screenshot, without a new browser-pass claim.
+  ACTUAL strict adapter ran twice on saved visible/occluded examples against
+  existing source/PNG/ledger bytes, into fresh ignored annotation-walkthrough-
+  20261008 outputs. Both1synthetic/0observed/2unreviewed/development-only/native
+  parityfalse; original9007199254740993/600 preserved, visible(0.25,0.75)/radius2
+  and occluded nullpoint/nulluncertainty checked. Bundle ledgerText equals bytes.
+- Independent browser request/privacy and directfileURL gates remain blocked by
+  absent request-log capability/fileURL policy. No reliable acceptance ETA before
+  allowed verification surface/human result; re-estimate then. No private media.
+- Leader approved same warm owned device implementation; checkpoint preserved
+  first, now priority Medium source15–25min provisional/noharddeadline. Same560s/
+  test10/job30 bounds, all63 source IDs/separateexports/ownership retained;
+  no reset/retry/push/newCI. Unproven experiment, native/readiness dates unknown.
+
 ## Same warm device experiment proposed — October 8, 2026, 07:03 ET
 
 - Scope only in native-same-owned-device-scope.md: retain original compile/fresh
