@@ -125,19 +125,22 @@ private final class SyntheticMovieWriter: @unchecked Sendable {
     private let destination: URL
     private var nextFrame = 0
     private var completed = false
-    private let completion: @Sendable (Result<Void, Error>) -> Void
+    private var completion: (@Sendable (Result<Void, Error>) -> Void)?
+    private var deadline: DispatchWorkItem?
+    private var phase = "not started"
+    private var startedAt = 0.0
 
     static func write(to url: URL) async throws {
+        let encoder = try SyntheticMovieWriter(destination: url)
+        // Keep the encoder alive across suspension; callbacks need not retain it in a cycle.
+        defer { withExtendedLifetime(encoder) {} }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            do {
-                let encoder = try SyntheticMovieWriter(destination: url) { continuation.resume(with: $0) }
-                encoder.start()
-            } catch { continuation.resume(throwing: error) }
+            encoder.start { continuation.resume(with: $0) }
         }
     }
 
-    private init(destination: URL, completion: @escaping @Sendable (Result<Void, Error>) -> Void) throws {
-        self.destination = destination; self.completion = completion
+    private init(destination: URL) throws {
+        self.destination = destination
         writer = try AVAssetWriter(outputURL: destination, fileType: .mov)
         input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 64, AVVideoHeightKey: 48])
@@ -150,16 +153,24 @@ private final class SyntheticMovieWriter: @unchecked Sendable {
         writer.add(input)
     }
 
-    private func start() {
+    private func start(completion: @escaping @Sendable (Result<Void, Error>) -> Void) {
         queue.async { [self] in
+            self.completion = completion
+            startedAt = ProcessInfo.processInfo.systemUptime
+            phase = "starting writer"
             guard writer.startWriting() else { finish(.failure(writer.error ?? failure("Encoder did not start"))); return }
             writer.startSession(atSourceTime: .zero)
-            queue.asyncAfter(deadline: .now() + 10) { [self] in
-                guard !completed else { return }
-                writer.cancelWriting()
-                finish(.failure(failure("Synthetic encoder exceeded 10-second budget")))
+            phase = "waiting for frames"
+            let deadline = DispatchWorkItem { [weak self] in
+                guard let self, !self.completed else { return }
+                let elapsed = ProcessInfo.processInfo.systemUptime - self.startedAt
+                let diagnostic = "Synthetic encoder exceeded 30-second budget: phase=\(self.phase), frames=\(self.nextFrame)/3, status=\(self.writer.status.rawValue), elapsed=\(elapsed), writerError=\(String(describing: self.writer.error))"
+                self.writer.cancelWriting()
+                self.finish(.failure(self.failure(diagnostic)))
             }
-            input.requestMediaDataWhenReady(on: queue) { [self] in appendReadyFrames() }
+            self.deadline = deadline
+            queue.asyncAfter(deadline: .now() + 30, execute: deadline)
+            input.requestMediaDataWhenReady(on: queue) { [weak self] in self?.appendReadyFrames() }
         }
     }
 
@@ -167,6 +178,7 @@ private final class SyntheticMovieWriter: @unchecked Sendable {
         guard !completed, nextFrame < 3 else { return }
         do {
             while input.isReadyForMoreMediaData, nextFrame < 3 {
+                phase = "appending frame \(nextFrame)"
                 var buffer: CVPixelBuffer?
                 let status = CVPixelBufferCreate(kCFAllocatorDefault, 64, 48, kCVPixelFormatType_32BGRA, nil, &buffer)
                 guard status == kCVReturnSuccess, let buffer else { throw failure("Pixel buffer creation failed") }
@@ -182,23 +194,28 @@ private final class SyntheticMovieWriter: @unchecked Sendable {
                 nextFrame += 1
             }
             if nextFrame == 3 {
+                phase = "finishing writer"
                 writer.endSession(atSourceTime: CMTime(value: 3, timescale: 10))
                 input.markAsFinished()
-                writer.finishWriting { [self] in
-                    queue.async { [self] in
-                        if writer.status == .completed { finish(.success(())) }
-                        else { finish(.failure(writer.error ?? failure("Encoder did not finish"))) }
+                writer.finishWriting { [weak self] in
+                    guard let self else { return }
+                    self.queue.async { [weak self] in
+                        guard let self, !self.completed else { return }
+                        if self.writer.status == .completed { self.finish(.success(())) }
+                        else { self.finish(.failure(self.writer.error ?? self.failure("Encoder did not finish"))) }
                     }
                 }
-            }
+            } else { phase = "waiting for frame \(nextFrame)" }
         } catch { writer.cancelWriting(); finish(.failure(error)) }
     }
 
     private func finish(_ result: Result<Void, Error>) {
         guard !completed else { return }
         completed = true
+        deadline?.cancel(); deadline = nil
         if case .failure = result { try? FileManager.default.removeItem(at: destination) }
-        completion(result)
+        let completion = self.completion; self.completion = nil
+        completion?(result)
     }
 
     private func failure(_ message: String) -> NSError {
