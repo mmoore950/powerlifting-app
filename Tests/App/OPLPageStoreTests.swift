@@ -42,6 +42,26 @@ private actor DeferredScreenTransport: OPLTransport {
     func releaseFirst() { continuation?.resume(returning: old); continuation = nil }
 }
 
+private actor ProfileScreenTransport: OPLTransport {
+    let metadata: Data, summary: Data, history: Data
+    let expired: String
+    var offline = false
+    var requests = 0
+    init(metadata: Data, summary: Data, history: Data, expired: String) {
+        self.metadata = metadata; self.summary = summary; self.history = history; self.expired = expired
+    }
+    func get(_ url: URL) throws -> Data {
+        requests += 1
+        if offline { throw OPLError.noCachedData }
+        if url.path == "/dataset" { return metadata }
+        let version = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "version" }?.value
+        if version == expired { throw OPLError.versionUnavailable }
+        return url.path.hasSuffix("/summary") ? summary : history
+    }
+    func setOffline() { offline = true }
+    func count() -> Int { requests }
+}
+
 /// Simulator XCTest SOURCES only. Synthetic DTOs; no UI/Swift execution claimed.
 final class OPLPageStoreTests: XCTestCase {
     private let a = String(repeating: "a", count: 64), b = String(repeating: "b", count: 64)
@@ -57,6 +77,52 @@ final class OPLPageStoreTests: XCTestCase {
     }
     private func repository(_ transport: any OPLTransport) throws -> OPLRepository {
         try OPLRepository(baseURL: XCTUnwrap(URL(string: "https://fixture.invalid")), transport: transport, cache: ScreenCache())
+    }
+    @MainActor func testConcurrentProfileHistoryRecoveryOfflineReuseAndFailedNewScopeNeverRetainOldRows() async throws {
+        let name = "Synthetic Profile #1"
+        let id = Data(name.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        let scope = ["sex": "F", "equipment": "Raw", "event": "SBD"]
+        let row: [String: Any] = ["row_id": 1, "Name": name, "lifterId": id, "Sex": "F", "Equipment": "Raw", "Event": "SBD",
+            "Date": "2025-01-01", "MeetName": "Synthetic meet", "Federation": "FIX", "Division": "Open",
+            "Place": "1", "Tested": "Yes", "WeightClassKg": "75", "TotalKg": 500]
+        let summaryBytes = try bytes(["version": b, "results": [["Name": name, "lifterId": id, "scope": scope,
+            "bests": [["metric": "total", "result": row]]]], "nextCursor": NSNull()])
+        let historyBytes = try bytes(["version": b, "results": [row], "nextCursor": NSNull()])
+        let transport = ProfileScreenTransport(metadata: try metadata(b), summary: summaryBytes, history: historyBytes, expired: a)
+        let client = try repository(transport)
+        let summary = OPLPageStore<OPLProfileSummary>(), history = OPLPageStore<OPLResult>()
+        let summaryQuery = OPLQuery(path: "lifters/\(id)/summary", parameters: scope)
+        let historyQuery = OPLQuery(path: "lifters/\(id)/results")
+        var adoptedVersions: [String] = []
+        let adopt: @MainActor (OPLDelivery<OPLDataset>, OPLRepository) -> Void = { delivery, _ in
+            adoptedVersions.append(delivery.value.dataset?.version ?? "missing")
+        }
+        let first = Task { @MainActor in await summary.reset(client: client, version: self.a, query: summaryQuery, adoptDataset: adopt) }
+        let second = Task { @MainActor in await history.reset(client: client, version: self.a, query: historyQuery, adoptDataset: adopt) }
+        await first.value; await second.value
+        XCTAssertEqual(adoptedVersions, [b, b]); XCTAssertEqual(summary.loadedVersion, b); XCTAssertEqual(history.loadedVersion, b)
+        XCTAssertEqual(summary.items.first?.bests.first?.value, 500); XCTAssertEqual(history.items.first?.total, 500)
+        let before = await transport.count(); XCTAssertEqual(before, 6)
+        // Shared metadata revision restarts both tasks after their own adoption.
+        await summary.reset(client: client, version: b, query: summaryQuery, adoptDataset: adopt)
+        await history.reset(client: client, version: b, query: historyQuery, adoptDataset: adopt)
+        let after = await transport.count(); XCTAssertEqual(after, before)
+        await transport.setOffline()
+        await summary.reset(client: client, version: b, query: summaryQuery, adoptDataset: adopt)
+        await history.reset(client: client, version: b, query: historyQuery, adoptDataset: adopt)
+        XCTAssertTrue(summary.offline); XCTAssertTrue(history.offline)
+        XCTAssertEqual(summary.loadedVersion, history.loadedVersion); XCTAssertEqual(summary.items.first?.scope, scope)
+        // No cache under changed filters: the previous raw profile cannot survive.
+        var wraps = scope; wraps["equipment"] = "Wraps"
+        await summary.reset(client: client, version: b, query: OPLQuery(path: summaryQuery.path, parameters: wraps), adoptDataset: adopt)
+        XCTAssertTrue(summary.items.isEmpty); XCTAssertNotNil(summary.error); XCTAssertEqual(history.items.count, 1)
+        // No cache under a new selected version: both prior result arrays must clear.
+        let c = String(repeating: "c", count: 64)
+        await summary.reset(client: client, version: c, query: summaryQuery, adoptDataset: adopt)
+        await history.reset(client: client, version: c, query: historyQuery, adoptDataset: adopt)
+        XCTAssertEqual(summary.loadedVersion, c); XCTAssertEqual(history.loadedVersion, c)
+        XCTAssertTrue(summary.items.isEmpty); XCTAssertTrue(history.items.isEmpty)
+        XCTAssertNotNil(summary.error); XCTAssertNotNil(history.error)
     }
     @MainActor func testRecoveryAdoptionResetKeepsNewRowsAndDoesNotGrantAnotherAutomaticRetry() async throws {
         let transport = ScreenTransport([.error(.versionUnavailable), .data(try metadata(b)),

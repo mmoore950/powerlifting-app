@@ -183,15 +183,15 @@ private struct OPLHistoryView: View {
                     Button("Clear additional ranking filters") { scope = scope.filter { ["sex", "equipment", "event", "tested"].contains($0.key) } }
                 }
                 Text("Best eligible values across this entire dataset for these filters; not ratified records. Lift bests can come from different meets and do not add up to a competition total.").font(.caption)
-                OPLPageStatus(page: summary)
+                OPLPageStatus(page: summary, retryLabel: "Retry profile")
                 if consistentVersion, let profile = summary.items.first, profile.scope == scope {
                     ForEach(["total", "squat", "bench", "deadlift", "dots"], id: \.self) { metric in
                         if let best = profile.bests.first(where: { $0.metric == metric }), let value = best.value {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("\(metric.capitalized): \(value.formatted(.number.precision(.fractionLength(0...2))))\(metric == "dots" ? "" : " kg")").font(.headline)
+                                Text("\(metric == "dots" ? "DOTS" : metric.capitalized): \(value.formatted(.number.precision(.fractionLength(0...2))))\(metric == "dots" ? "" : " kg")").font(.headline)
                                 Text("\(best.result.meet) · \(best.result.date) · \(best.result.federation)").font(.caption)
                             }
-                        } else { Text("\(metric.capitalized): no eligible value for these filters").font(.caption) }
+                        } else { Text("\(metric == "dots" ? "DOTS" : metric.capitalized): no eligible value for these filters").font(.caption) }
                     }
                 } else if consistentVersion, summary.items.isEmpty, !summary.loading, summary.error == nil {
                     Text("This source name is absent from the selected dataset.")
@@ -205,7 +205,7 @@ private struct OPLHistoryView: View {
             }
             Section("Meet history · all categories") {
                 Text("All rows for this exact source name, independent of profile filters. Divisions can produce repeated meet rows.").font(.caption)
-                OPLPageStatus(page: page)
+                OPLPageStatus(page: page, retryLabel: "Retry meet history")
                 if page.loadedVersion == model.version {
                     ForEach(page.items) { result in OPLResultRow(result: result) }
                     if !page.loading, page.error == nil, model.version != nil, page.items.isEmpty {
@@ -336,11 +336,12 @@ private struct OPLResultRow: View {
 @MainActor
 private struct OPLPageStatus<Item: Codable & Identifiable & Sendable>: View {
     @ObservedObject var page: OPLPageStore<Item>
+    var retryLabel = "Try again"
     var body: some View {
         if page.loading { ProgressView("Loading results") }
         if let error = page.error {
             InputErrorView(message: error)
-            Button("Try again") { Task { await page.retry() } }.disabled(page.loading)
+            Button(retryLabel) { Task { await page.retry() } }.disabled(page.loading)
         }
         if page.offline { Text("Live refresh unavailable — previously saved pages").foregroundStyle(.orange) }
         if let notice = page.notice { Text(notice).font(.caption).foregroundStyle(.orange) }

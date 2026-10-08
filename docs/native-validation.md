@@ -99,7 +99,7 @@ second command. `test-phases.json` records the aggregate and partial/unrun phase
 An outer observation failure stops only the owned supervisor wrapper and reports
 unverified child cleanup, never successful cleanup of escaped sessions/services.
 
-The current named XCTest source inventory is45core+20app-host+1UI=66 iOS methods;
+The current named XCTest source inventory is45core+21app-host+1UI=67 iOS methods;
 the additional generated two-window method is source only and absent fromrun17.
 the HTTP test is entirely macOS-only, so iOS has no expected HTTP skip. Its separate
 actual HTTP gate and macOS opt-in skip remain. `check-test-inventory.py` requires

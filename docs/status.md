@@ -1,6 +1,43 @@
 # Worker status
 
-## Run18 diagnosed; profile implementation active � October 8, 2026, 07:26 ET
+## Profile UI-state source audit — October 8, 2026, 07:35 ET
+
+- Source audit retained explicit all-category history and kg versus unitless DOTS,
+  changed retry buttons to Retry profile / Retry meet history, and shows a notice
+  when filter changes hide earlier bests. Summary values require echoed scope and
+  both page stores matching shared selected version; history rows require shared
+  selected version. Error/offline/save-time states reuse existing page status.
+- Added ONE app-host source regression driving typed summary/history stores through
+  concurrent expiration into the same version, adoption resets without extra fetch,
+  saved offline reuse, uncached changed-filter failure clearing summary, and failed
+  new-version reload clearing both old arrays. This is uncompiled/unrun Windows
+  source, not an actual simulator/UI pass. Source inventory now67 (45core21app1UI).
+- Prior source408246d included10files, not11; this follow-up persists status/audit
+  separately. Corrected mixed document encoding/newlines encountered in the status
+  update; strict UTF-8/whitespace checked. No new service logic/test rerun needed.
+- Audit checkpoint complete within5–10min provisional/noharddeadline; review
+  response determines next corrections, review ETA unknown. Preapproved retained
+  runtime selection scope follows (5–10min provisional/noharddeadline). Native
+  readiness cannot be dated before a reviewed experiment; no push/newCI. Existing
+  build8/test10/job30 and production/private/release gates remain separate.
+
+## Profile source checkpoint — October 8, 2026, 07:31 ET
+
+- Implemented full-snapshot exact-source-name summary with at most five winning
+  rows, all existing filters and shared ranking predicates. Ranking drill-down
+  preserves scope; native values hide on changed scope/version. History stays
+  explicitly all categories. Source408246d covers10ownedfiles, excluding leader docs.
+- ACTUAL affected Windows suite13pass/no skips in5.757s. Existing official cached
+  Taylor Atwood snapshot HTTP200/five metrics, SQL10.009ms/HTTP60.147ms; not a
+  new upstream freshness check. Three new Swift contract/cache/recovery methods
+  uncompiled/unrun; source66iOS expected only. Source ahead of45–75min provisional
+  estimate/noharddeadline. Leader accepted direction pending state audit/Apple.
+- State audit adds distinct profile/history retry labels and pending-filter hiding;
+  concurrent expiration/offline/failed reload source test follows. Checkpoint5–10min
+  provisional/noharddeadline; runtime decision scope then. No push/newCI. Native,
+  production/private/release gates remain separate.
+
+## Run18 diagnosed; profile implementation active — October 8, 2026, 07:26 ET
 
 - Verified archive evidence is in native-run18-evidence.md. Compilation succeeded
   (137.632s); bootstatus migration did not reach readiness. Shared build125 at
@@ -15,7 +52,7 @@
   context and complete snapshot winners. Source changes underway; actual new
   Windows profile service tests2pass in0.580s, including live HTTP and two-version
   additions/corrections/removals. These do not validate Swift/UI. Remaining source
-  and handoff estimate 25�45min from07:26ET, noharddeadline, uncertain recovery/
+  and handoff estimate 25–45min from07:26ET, noharddeadline, uncertain recovery/
   DTO checks; re-estimate at the next source checkpoint. Production/private/release
   gates separate. Next queue: profile error/empty/offline/version UI audit.
 
