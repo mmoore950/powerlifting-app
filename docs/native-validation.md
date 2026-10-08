@@ -107,6 +107,15 @@ the split passing IDs to match current iOS sources exactly once, with no omitted
 extra, failed or skipped methods. Unsupported conditional/generated source forms
 require review rather than a frozen count. This log gate is not a Swift parser.
 
+Setup records the active numerical simulator SDK in simulator-sdk-version.txt.
+Prepare requires that measured receipt and selects an available installed iOS17+
+runtime with the same major/minor version, then deterministically chooses a valid
+available iPhone. requestedSDK/matchPolicy/chosen runtime are recorded; missing,
+malformed or unavailable matching candidates fail without newest-runtime fallback
+or download. Five pure selector/receipt checks run at setup. Actual Windows replay
+of retained run18 inventory with measured18.5 selects its existing18.5 candidate;
+no boot/readiness/test or improved migration behavior is established.
+
 `owned_ui_simulator.py` records preexisting IDs, run/attempt/name/runtime/device
 type and validates the returned new UUID against fresh inventory before boot.
 Creation/validation shares90s including bounded command cleanup within prepare2min;

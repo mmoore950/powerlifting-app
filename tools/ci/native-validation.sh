@@ -17,11 +17,12 @@ case "$phase" in
     xcode-select -p
     xcodebuild -version
     swift --version
-    xcrun --sdk iphonesimulator --show-sdk-version
+    xcrun --sdk iphonesimulator --show-sdk-version | tee "$output/simulator-sdk-version.txt"
     python3 --version
     # Actual POSIX child/group/cancellation checks run on this macOS host.
     SUPERVISOR_TEST_EVIDENCE_DIR="$output" python3 tools/ci/test-supervise-process.py
     ORCHESTRATION_TEST_EVIDENCE_DIR="$output" python3 tools/ci/test-native-orchestration.py
+    python3 tools/ci/test-select-simulator.py
     tool_dir="${RUNNER_TEMP:?Hosted runner temp directory required}/powerlifting-xcodegen"
     mkdir -p "$tool_dir"
     curl --fail --location --max-time 120 --retry 2 \
@@ -78,7 +79,7 @@ PY
     xcodegen generate --spec project.yml
     xcodebuild -list -project PowerliftingApp.xcodeproj
     xcrun simctl list --json > "$output/simulators.json"
-    python3 tools/ci/select-simulator.py "$output/simulators.json" > "$output/selected-simulator.json"
+    python3 tools/ci/select-simulator.py "$output/simulators.json" "$output/simulator-sdk-version.txt" > "$output/selected-simulator.json"
     cat "$output/selected-simulator.json"
     python3 - "$output/selected-simulator.json" "${GITHUB_OUTPUT:?}" <<'PY'
 import json, sys

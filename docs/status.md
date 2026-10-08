@@ -1,5 +1,26 @@
 # Worker status
 
+## SDK-matched selector source checkpoint — October 8, 2026, 07:39 ET
+
+- Approved implementation requires numerical measured SDK receipt (setup tee,
+  bounded regular non-symlink file) as selector CLI input. Matching available
+  installed iOS17+ runtime major/minor and deterministic valid available iPhone
+  selected; requested SDK/chosen runtime/matchPolicy retained. No absent-match
+  fallback, downloads, hardcoded production UDID or ownership/readiness bypass.
+- ACTUAL Windows5pure selector/receipt tests pass0.010s: measured/patch match,
+  absent/unavailable/malformed runtime refusing newest26.2, malformed/below17 SDK,
+  invalid/missing candidate/tie determinism, required bounded single-version file.
+  Actual CLI on verified run18 inventory +18.5 parsed from retained setup selects
+  iPhone16/565DED02.../18.5.0 with requestedSDK18.5. Ignored evidence retained.
+  Python compilation, bash -n and whitespace checks passed. Apple boot/test/
+  cleanup benefit unrun, all67iOS expected only; existing budgets retained.
+- Source complete ahead of10–20min provisional/noharddeadline; leader review next,
+  ETA unknown before response. Preapproved native profile accessibility/Dynamic
+  Type source audit follows5–10min/noharddeadline; actual Apple interaction pending.
+  No push/newCI. Native acceptance undated until reviewed run evidence, usual
+  15–22min afterstart provisional/build8/test10/job30. Production/private/release
+  gates remain separate.
+
 ## SDK-matched runtime decision scope — October 8, 2026, 07:38 ET
 
 - Retained run18 setup reports Xcode16.4/build16F6 and simulator SDK18.5. Actual
