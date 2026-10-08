@@ -69,10 +69,10 @@ struct SharedEquipmentControls: View {
     @State private var showingNotices = false
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("Display weight", selection: Binding(get: { model.displayUnit }, set: model.setDisplayUnit)) {
+            Picker("Display weight", selection: Binding(get: { model.displayUnit }, set: { model.setDisplayUnit($0) })) {
                 ForEach(WeightUnit.allCases, id: \.self) { Text("Show \($0.symbol)").tag($0) }
             }.pickerStyle(.segmented)
-            Picker("Plate inventory", selection: Binding(get: { model.plateUnit }, set: model.setPlateUnit)) {
+            Picker("Plate inventory", selection: Binding(get: { model.plateUnit }, set: { model.setPlateUnit($0) })) {
                 ForEach(WeightUnit.allCases, id: \.self) { Text("\($0.symbol) plates").tag($0) }
             }.pickerStyle(.segmented)
             Button("Shared bar, collars & inventory") { showingEquipment = true }

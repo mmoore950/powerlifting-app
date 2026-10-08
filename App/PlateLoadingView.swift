@@ -25,8 +25,8 @@ struct PlateLoadingView: View {
                         }
                     }
                     HStack {
-                        unitPicker("Show weight in", value: model.displayUnit, setter: model.setDisplayUnit)
-                        unitPicker("Available plates", value: model.plateUnit, setter: model.setPlateUnit)
+                        unitPicker("Show weight in", value: model.displayUnit, setter: { model.setDisplayUnit($0) })
+                        unitPicker("Available plates", value: model.plateUnit, setter: { model.setPlateUnit($0) })
                     }
                     if model.mode == .load {
                         VStack(alignment: .leading, spacing: 8) {
@@ -87,7 +87,7 @@ struct PlateLoadingView: View {
     }
 
     private func unitPicker(_ label: String, value: WeightUnit,
-                            setter: @escaping (WeightUnit) -> Void) -> some View {
+                            setter: @escaping @MainActor @Sendable (WeightUnit) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             Picker(label, selection: Binding(get: { value }, set: setter)) {
