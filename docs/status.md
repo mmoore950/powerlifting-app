@@ -1,5 +1,21 @@
 # Worker status
 
+## Profile additional-filter scope — October 8, 2026, 07:44 ET
+
+- Scope only in profile-filter-editing-scope.md: reuse ranking six text fields in
+  a small shared native editor for federation/from/to/bodyweight min/max/literal
+  class. Draft text remains separate until explicit Apply; inherited context,
+  selected categories/tested/metric, clear synchronization and applied labels
+  preserved. Existing shared service validation remains authoritative, no new
+  class/date/bodyweight interpretation or architecture.
+- Source proposal15–25min after approval, noharddeadline, uncertain binding/draft
+  coordination. Scope complete within5–10min provisional; review ETA unknown until
+  response. Real keyboard/accessibility/DynamicType/task-order/rendering pending.
+- Run19/job113292468047 setup succeeded, macOS core underway at07:43ET; native
+ 67/exports/cleanup still pending. Source changes afterb06eb77 excluded. Outcome
+ 15–22min afteractualstart provisional/build8/test10/job30, no retry. Production
+ freshness/private accuracy/release gates remain separate.
+
 ## Run19 dispatched; profile accessibility source audit — October 8, 2026, 07:40 ET
 
 - Exact reviewed b06eb77497d1f9551709954c974b59ef6f951b96 pushed to private main,
