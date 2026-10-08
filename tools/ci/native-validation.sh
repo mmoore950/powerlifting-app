@@ -19,6 +19,8 @@ case "$phase" in
     swift --version
     xcrun --sdk iphonesimulator --show-sdk-version
     python3 --version
+    # Actual POSIX child/group/cancellation checks run on this macOS host.
+    python3 tools/ci/test-supervise-process.py
     tool_dir="${RUNNER_TEMP:?Hosted runner temp directory required}/powerlifting-xcodegen"
     mkdir -p "$tool_dir"
     curl --fail --location --max-time 120 --retry 2 \
@@ -87,15 +89,26 @@ PY
     ;;
   build|test)
     : "${SIMULATOR_ID:?Simulator selection missing}"
+    if [[ "$phase" == build ]]; then
+      action=build-for-testing
+      deadline=440
+    else
+      action=test-without-building
+      deadline=560
+    fi
+    # Internal deadline leaves 40s before the unchanged 8/10min step bounds.
+    # TERM grace + KILL/group observation + direct-child wait are bounded to 15s.
     # A single destination; no signing credentials, accounts or device provisioning.
-    xcodebuild -project PowerliftingApp.xcodeproj -scheme PowerliftingApp \
+    python3 tools/ci/supervise-process.py --timeout "$deadline" \
+      --term-grace 5 --kill-wait 5 --receipt "$output/$phase.process.json" -- \
+      xcodebuild -project PowerliftingApp.xcodeproj -scheme PowerliftingApp \
       -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
       -destination-timeout 60 \
       -derivedDataPath "$RUNNER_TEMP/powerlifting-derived-data" \
       -resultBundlePath "$output/$phase.xcresult" \
       -parallel-testing-enabled NO \
       -maximum-concurrent-test-simulator-destinations 1 \
-      CODE_SIGNING_ALLOWED=NO "$phase"
+      CODE_SIGNING_ALLOWED=NO "$action"
     ;;
   screenshots)
     # Keep successful UI-test attachments as ordinary files for visual review.

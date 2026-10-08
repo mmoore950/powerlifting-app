@@ -14,6 +14,34 @@ Review all five screenshots for clipping, unreadable text, navigation visibility
 
 ## Build and numerical execution
 
+The build phase now uses `build-for-testing`; the test phase uses
+`test-without-building` with the same scheme, destination and derived-data path.
+The full scheme and screenshot gate remain. This follows [Apple's xcodebuild
+documentation](https://developer.apple.com/library/archive/technotes/tn2339/_index.html).
+The unchanged outer limits are build 8 minutes, test 10 minutes and job 30 minutes.
+
+`tools/ci/supervise-process.py` launches xcodebuild without a shell in a new POSIX
+session/process group. Internal monotonic deadlines are 440/560 seconds, leaving
+40 seconds for cleanup and receipt writing before the outer step limit. Timeout
+or SIGINT/SIGTERM signals only that owned group, allows 5 seconds of grace, then
+uses KILL if necessary, observes the group for up to 5 seconds and waits for the
+direct child for up to 5 seconds. Remaining owned descendants are also cleaned
+after a normal child exit. Escaped sessions and simulator OS services are outside
+this boundary; no process-name matching or global kill is used. Group existence
+can include unreaped zombies, so incomplete cleanup fails conservatively with125.
+Timeout is124, cancellation is128+signal and ordinary child failures are retained.
+
+Top-level `build.process.json`/`test.process.json` receipts preserve the command,
+PID/group, reason, signals, child exit and observed cleanup outcome in the plain
+diagnostic artifact. A hard external kill can leave a `running` receipt; that is
+not completed phase evidence. These deadlines do not guarantee OS scheduling or
+termination of an uninterruptible process. No retry or timeout expansion was added.
+The existing setup phase runs nine focused synthetic supervisor methods, including
+POSIX TERM/KILL, SIGINT/SIGTERM cancellation, child/grandchild cleanup and unrelated
+process preservation and descendants remaining after a normal parent exit.
+Windows runs only four direct-child checks and skips the five POSIX methods.
+Source/local success is separate from macOS/Xcode execution.
+
 1. Run `swift test --package-path Packages/LiftingCore`: fixture cases and 120 deterministic small-inventory comparisons against exhaustive full count-vector enumeration, plus invalid inputs/decoding/selection/cap cases.
 2. Generate the project, compile the app, run its scheme tests, including PowerliftingAppTests and the package tests. Resolve warnings that expose isolation, resources, test-host or package/scheme problems. New application test sources have not been generated/compiled/run in Windows.
 3. Run the UI on Simulator and a real iPhone before calling this feature validated.

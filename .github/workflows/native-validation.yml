@@ -39,7 +39,7 @@ jobs:
         id: simulator
         timeout-minutes: 2
         run: bash tools/ci/native-validation.sh prepare
-      - name: Unsigned simulator build
+      - name: Unsigned simulator build for testing
         timeout-minutes: 8
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.simulator_id }}
