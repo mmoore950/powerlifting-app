@@ -24,16 +24,16 @@ final class OPLProfileTests: XCTestCase {
     private let version = String(repeating: "a", count: 64)
     private let next = String(repeating: "b", count: 64)
     private let scope = ["sex": "F", "equipment": "Raw", "event": "SBD", "weightClass": "75+"]
-    private let name = "Synthetic Profile #1"
-    private var id: String { Data(name.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "") }
+    private let sourceName = "Synthetic Profile #1"
+    private var id: String { Data(sourceName.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "") }
     private var query: OPLQuery { OPLQuery(path: "lifters/\(id)/summary", parameters: scope) }
     private func bytes(_ object: [String: Any]) throws -> Data { try JSONSerialization.data(withJSONObject: object) }
     private func result() -> [String: Any] {
-        ["row_id": 1, "Name": name, "lifterId": id, "Sex": "F", "Equipment": "Raw", "Event": "SBD",
+        ["row_id": 1, "Name": sourceName, "lifterId": id, "Sex": "F", "Equipment": "Raw", "Event": "SBD",
          "Date": "2025-01-01", "MeetName": "Synthetic meet", "Federation": "FIX", "Division": "Open",
          "Place": "1", "Tested": "Yes", "WeightClassKg": "75+", "BodyweightKg": 70, "TotalKg": 500]
     }
-    private func object() -> [String: Any] { ["Name": name, "lifterId": id, "scope": scope, "bests": [["metric": "total", "result": result()]]] }
+    private func object() -> [String: Any] { ["Name": sourceName, "lifterId": id, "scope": scope, "bests": [["metric": "total", "result": result()]]] }
     private func page(_ version: String, object: [String: Any]? = nil) throws -> Data {
         try bytes(["version": version, "results": [object ?? self.object()], "nextCursor": NSNull()])
     }

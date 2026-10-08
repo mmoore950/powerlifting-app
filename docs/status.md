@@ -1,5 +1,22 @@
 # Worker status
 
+## Run19 compiler failure and narrow source correction — October 8, 2026, 07:47 ET
+
+- Exactb06eb77 run37771657886/job113292468047 completed failure during macOS core
+  compilation. New OPLProfileTests stored private name collided with XCTestCase.name;
+  renamed fixture property/uses to sourceName, preserving URLQueryItem.name and
+  all assertions/inventory. Fix uncompiled/unrun on Windows, no pass claimed.
+- Actual11POSIX/29orchestration/5selector passed; captured SDK18.5. HTTP/simulator/
+  native67/exports skipped. Cleanup0/preparation-not-started, no created simulator.
+  Verified102529-byte diagnostic ZIP203entries/147659uncompressed retained; full
+  evidence in native-run19-evidence.md. No live runtime/periodic native receipt
+  exists, no runtime benefit/root-cause cure claim or repeat dispatch.
+- Diagnosis/fix checkpoint complete before3–8min provisional/noharddeadline;
+  review next, response ETA unknown. Native readiness undated until reviewed
+  compile and actual native evidence; build8/test10/job30 retained. Leader approved
+  shared profile additional-filter editor; resume15–25min provisional/noharddeadline,
+  uncertain draft/binding coordination. Production/private/release gates separate.
+
 ## Profile additional-filter scope — October 8, 2026, 07:44 ET
 
 - Scope only in profile-filter-editing-scope.md: reuse ranking six text fields in
