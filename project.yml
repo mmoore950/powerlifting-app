@@ -32,6 +32,7 @@ targets:
       testTargets:
         - package: LiftingCore/LiftingCoreTests
         - PowerliftingAppTests
+        - PowerliftingAppUITests
   PowerliftingAppTests:
     type: bundle.unit-test
     platform: iOS
@@ -44,3 +45,15 @@ targets:
     dependencies:
       - target: PowerliftingApp
       - package: LiftingCore
+  PowerliftingAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/UI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.powerliftingapp.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: PowerliftingApp
+    dependencies:
+      - target: PowerliftingApp

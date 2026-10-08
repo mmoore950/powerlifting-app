@@ -38,11 +38,14 @@ jobs:
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.simulator_id }}
         run: bash tools/ci/native-validation.sh build
-      - name: Run core and app-host tests through the iOS simulator scheme
+      - name: Run core, app-host and UI smoke tests through the iOS simulator scheme
         timeout-minutes: 10
         env:
           SIMULATOR_ID: ${{ steps.simulator.outputs.simulator_id }}
         run: bash tools/ci/native-validation.sh test
+      - name: Export UI screenshot attachments for visual review
+        timeout-minutes: 2
+        run: bash tools/ci/native-validation.sh screenshots
       - name: Summarize diagnostic evidence
         if: always()
         run: bash tools/ci/native-validation.sh summary

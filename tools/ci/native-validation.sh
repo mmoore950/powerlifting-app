@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 output="$PWD/artifacts/native-ci"
 mkdir -p "$output"
-phase="${1:?Expected setup/core/prepare/build/test/summary}"
+phase="${1:?Expected setup/core/prepare/build/test/screenshots/summary}"
 if [[ "$phase" != summary ]]; then
   # pipefail propagates command failures; logs survive ordinary step failures.
   exec > >(tee "$output/$phase.log") 2>&1
@@ -65,12 +65,26 @@ PY
       -maximum-concurrent-test-simulator-destinations 1 \
       CODE_SIGNING_ALLOWED=NO "$phase"
     ;;
+  screenshots)
+    # Keep successful UI-test attachments as ordinary files for visual review.
+    # This runs only after test success; failed runs still preserve test.xcresult.
+    xcrun xcresulttool export attachments --path "$output/test.xcresult" \
+      --output-path "$output/screenshots"
+    python3 - "$output/screenshots" <<'PY'
+from pathlib import Path
+import sys
+screenshots = list(Path(sys.argv[1]).rglob("*.png"))
+print(f"Exported PNG attachments: {len(screenshots)}")
+if len(screenshots) < 5:
+    raise SystemExit("Expected at least five UI smoke screenshot attachments")
+PY
+    ;;
   summary)
     {
       printf '## Native validation diagnostics\n\n'
       printf 'Runner label: `macos-15-intel`; actual versions are in setup.log.\n\n'
       printf 'Revision: `%s`\n\n' "$(git rev-parse HEAD)"
-      for checked_phase in setup core prepare build test; do
+      for checked_phase in setup core prepare build test screenshots; do
         if [[ -f "$output/$checked_phase.exit-code" ]]; then
           printf -- '- %s exit code: %s\n' "$checked_phase" "$(cat "$output/$checked_phase.exit-code")"
         else

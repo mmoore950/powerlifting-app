@@ -1,8 +1,16 @@
 # Native validation gate
 
-Status: all checks below are pending Apple-toolchain execution. Node fixture enumeration is not this gate.
+Status: first Apple CI passed on 2026-10-07 at revision ee7f22a: unsigned app build, 42 macOS core tests, 42 simulator core tests and 6 app-host tests, zero failures. See docs/status.md for run/toolchain/runtime evidence. The interactive/device checks below remain pending; Node fixture enumeration is not this gate.
 
 Record Mac/Xcode/Swift/XcodeGen versions, Simulator/iPhone model and OS, exact commands, results and screenshots.
+
+## Bounded simulator UI smoke and screenshots
+
+The manual workflow now includes PowerliftingAppUITests: one smoke method launches the app, visits Plates, Training, Attempts, Competition and Bar path, checks reachable tabs/navigation plus disconnected-data/local-import controls, and attaches five named screenshots with keepAlways lifetime. Training/Attempts are two tabs within one feature group. No private media, live API, fake lifters or tracking paths are supplied. CI uses a fresh hosted simulator; this test expects no previously configured endpoint or imported video.
+
+After successful scheme tests, `bash tools/ci/native-validation.sh screenshots` exports all attachments from test.xcresult using xcresulttool and requires at least five PNG files. Review the attachment manifest/names and images under artifacts/native-ci/screenshots; a file count is not visual approval. Existing result bundles are retained on test failure; the export step is skipped then. The manual trigger, 10-minute test-step limit, 30-minute job limit and three-day artifact retention remain. UI test and export source are initially unrun until the next Apple CI confirms discovery, execution and output.
+
+Review all five screenshots for clipping, unreadable text, navigation visibility and honest disconnected/no-video states. This single default portrait smoke pass has no pixel baselines and does not exercise data browsing, video import/analysis, accessibility settings or device lifecycle. Successful tab navigation does not satisfy the acceptance checks below.
 
 ## Build and numerical execution
 
