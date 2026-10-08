@@ -1,5 +1,40 @@
 # Worker status
 
+## User-facing gap assessment — October 8, 2026, 07:21 ET
+
+- Scope complete in lifter-profile-feature-scope.md: recommend one exact-source-name,
+  category-filtered best-performance summary above existing meet history. Current
+  App destination contains history only; service has no summary route/DTO. Query
+  full immutable snapshot rather than partial history pages; retain eligibility,
+  independent winning meets, original identity and version/offline recovery.
+- Scope only; no implementation, push or new CI. Proposed source/service checkpoint
+  45–75 minutes after approval, no hard source deadline, uncertain filter factoring
+  and summary/history recovery. Review ETA unknown until leader response. Native,
+  production daily freshness, private accuracy and release gates remain separate.
+- Run18 jobs API at 07:18 ET: core and actual HTTP steps succeeded; simulator build
+  in progress, tests/exports/cleanup pending. Expected outcome 07:22–07:29 ET is
+  provisional from dispatch/start, with boot/install uncertainty; build8/test10/
+  job30 limits unchanged. No native63/export acceptance or repeat dispatch.
+
+## Run18 exact reviewed revision dispatched — October 8, 2026, 07:07 ET
+
+- Leader reviewed348d37e02e0424ae6682464ea563ef599e34ba17 and authorized
+  exact push/private origin main plus ONE manual existing workflow. Push succeeded;
+  no dirty leader docs included. GitHub browser verified run37768042551 links
+  exact fullSHA348d37e, job113280411298; initiallyqueued, theninprogress. No
+  billing/access/settings changed. Postdispatch404 resolved on one reload,
+  no resubmit/retry. Ignored dispatch screenshot retained beside run artifacts.
+- Native outcome15–22min after actual runnerstart provisional with queue/boot/UI/
+  installation uncertainty; build8/test10/job30 limits unchanged. New63iOS/
+  29POSIXorchestration/actualtwo-window/exports remain pending, no readinessclaim.
+  Onsuccess exactinventory/bothmanifests/generated-only extraction takespriority;
+  onfailure retainactualreceipts before proposing correction. No anotherretry.
+- Independent queue: bounded productbrief/App/currentartifact gap assessment,
+  identify next concrete user-facing implementation independentofApple/private
+  media. Scope/recommendation only,5–10min provisional/noharddeadline; review
+  decision follows, no automatic expansion. Privatebrowser/device/provider/
+  realaccuracy/release gates remain separate.
+
 ## Same verified warm device source checkpoint — October 8, 2026, 07:06 ET
 
 - Approved experiment implemented in native-test-phases.py: both test commands
